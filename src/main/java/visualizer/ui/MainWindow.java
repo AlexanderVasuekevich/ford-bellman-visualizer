@@ -42,6 +42,7 @@ public class MainWindow extends JFrame {
 
     // --- Элементы управления (панель сверху) ---
     private JButton loadButton;
+    private JButton saveButton;
     private JButton runButton;
     private JButton prevButton;
     private JButton nextButton;
@@ -87,6 +88,8 @@ public class MainWindow extends JFrame {
         toolBar.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
 
         loadButton = new JButton("Загрузить файл");
+        saveButton = new JButton("Сохранить в файл");
+        saveButton.setToolTipText("Сохранить результат работы алгоритма в файл (реализуется в версии 2)");
         runButton = new JButton("Запустить");
         prevButton = new JButton("← Назад");
         nextButton = new JButton("Вперёд →");
@@ -104,6 +107,7 @@ public class MainWindow extends JFrame {
         JLabel intervalLabel = new JLabel("Интервал, мс:");
 
         toolBar.add(loadButton);
+        toolBar.add(saveButton);
         toolBar.addSeparator();
         toolBar.add(runButton);
         toolBar.add(prevButton);

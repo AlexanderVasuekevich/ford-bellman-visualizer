@@ -1,4 +1,5 @@
-import visualizer.model.Graph;
+package visualizer.model;
+
 
 public final class PrototypeGraphMock {
     private PrototypeGraphMock() {

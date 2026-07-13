@@ -1,4 +1,4 @@
-package main.java.visualizer.ui;// Замени на свой пакет, если папка называется по-другому
+package visualizer.ui;
 
 import javax.swing.*;
 import java.awt.*;

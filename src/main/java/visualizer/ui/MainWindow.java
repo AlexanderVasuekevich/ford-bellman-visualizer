@@ -1,5 +1,9 @@
 package visualizer.ui;
 
+import visualizer.model.Graph;
+import visualizer.model.PrototypeGraphMock;
+import visualizer.model.Vertex;
+
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.JButton;
@@ -16,36 +20,23 @@ import javax.swing.JToolBar;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 
 /**
  * Главное окно приложения «Визуализатор алгоритма Форда–Беллмана».
  *
- * Этап: ПРОТОТИП. Ответственный: Васюкевич Александр (UI и интеграция).
+ * Этап: ПРОТОТИП. Ответственный за окно: Васюкевич Александр (UI, интеграция).
  *
- * Задача этого класса на прототипе — СВЁРСТАТЬ интерфейс:
- *   - панель управления сверху (все кнопки и поле интервала);
- *   - область отображения графа по центру (с прокруткой);
- *   - таблица текущих расстояний справа;
- *   - область текстового пояснения снизу;
- *   - индикаторы текущего прохода и текущего шага.
+ * Окно объединяет части всей бригады:
+ *   - вёрстка окна и панель управления — Васюкевич;
+ *   - отрисовка графа (GraphPanel) — Стрижков;
+ *   - модель данных и мок-граф (Graph, PrototypeGraphMock) — Бурменский.
  *
- * Логика намеренно отсутствует: обработчики к кнопкам НЕ привязаны,
- * нажатия ничего не выполняют. Данные в таблице и пояснении — статические
- * примеры-заглушки, только чтобы показать вид интерфейса. Функциональность
- * добавляется в Alpha-версии.
- *
- * ИНТЕГРАЦИЯ: центральная область сейчас — временный placeholder
- * (метод createGraphPlaceholder). В Alpha он заменяется на GraphPanel
- * Стрижкова: заменить строку в buildCenterAndRight() на
- *     JComponent graph = new GraphPanel();
+ * Логика алгоритма пока не подключена: большинство кнопок без обработчиков
+ * (нажатия ничего не выполняют). Работает кнопка «О разработчиках».
+ * Таблица расстояний заполнена по мок-графу (расстояния ещё не вычислены).
  */
 public class MainWindow extends JFrame {
 
@@ -60,13 +51,16 @@ public class MainWindow extends JFrame {
     private JButton aboutButton;
 
     // --- Центр / право / низ ---
-    private JPanel graphPlaceholder;
+    private GraphPanel graphPanel;
     private JTable distanceTable;
     private JTextArea explanationArea;
 
     // --- Индикаторы состояния ---
     private JLabel passLabel;
     private JLabel stepLabel;
+
+    // Мок-граф из модели данных (Бурменский) — показывается на прототипе.
+    private final Graph graph = PrototypeGraphMock.createGraph();
 
     public MainWindow() {
         super("Визуализатор алгоритма Форда–Беллмана");
@@ -84,7 +78,7 @@ public class MainWindow extends JFrame {
 
     /**
      * Панель управления сверху со всеми кнопками и полем интервала.
-     * Кнопки создаются, но обработчики к ним не привязаны.
+     * Кроме «О разработчиках», обработчики не привязаны (этап прототипа).
      */
     private JToolBar buildToolBar() {
         JToolBar toolBar = new JToolBar();
@@ -99,6 +93,10 @@ public class MainWindow extends JFrame {
         autoButton = new JToggleButton("Авто");
         editButton = new JToggleButton("Редактировать");
         aboutButton = new JButton("О разработчиках");
+
+        // Единственный подключённый обработчик на прототипе —
+        // модальное окно «О разработчиках» (класс AboutDialog, Стрижков).
+        aboutButton.addActionListener(e -> AboutDialog.show(this));
 
         intervalField = new JTextField("1000", 5);
         intervalField.setMaximumSize(new Dimension(60, 28));
@@ -124,33 +122,18 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Центральная часть: слева — область графа (с прокруткой),
-     * справа — таблица текущих расстояний. Разделены сплиттером.
+     * Центральная часть: слева — область графа (GraphPanel Стрижкова,
+     * отрисовывает мок-граф) с прокруткой; справа — таблица расстояний.
      */
     private JSplitPane buildCenterAndRight() {
-        // ВРЕМЕННО: placeholder вместо графа. В Alpha заменить на GraphPanel Стрижкова.
-        graphPlaceholder = createGraphPlaceholder();
+        graphPanel = new GraphPanel(graph);
         JScrollPane graphScroll = new JScrollPane(
-                graphPlaceholder,
+                graphPanel,
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         graphScroll.setBorder(BorderFactory.createTitledBorder("Граф"));
 
-        // Таблица расстояний. Данные — статический пример (заглушка).
-        String[] columns = {"Vertex", "Distance", "Parent"};
-        Object[][] sampleRows = {
-                {"A", "0", "-"},
-                {"B", "—", "—"},
-                {"C", "—", "—"},
-                {"D", "—", "—"},
-        };
-        DefaultTableModel model = new DefaultTableModel(sampleRows, columns) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; // таблица только для просмотра
-            }
-        };
-        distanceTable = new JTable(model);
+        distanceTable = new JTable(buildDistanceModel());
         distanceTable.setRowHeight(24);
         distanceTable.getTableHeader().setReorderingAllowed(false);
 
@@ -169,35 +152,27 @@ public class MainWindow extends JFrame {
     }
 
     /**
-     * Временная заглушка центральной области.
-     * Показывает рамку и поясняющую надпись; в Alpha заменяется на GraphPanel.
+     * Таблица расстояний строится по вершинам мок-графа. Расстояния ещё не
+     * вычислены (алгоритм не подключён): у источника — 0, у остальных — «—».
      */
-    private JPanel createGraphPlaceholder() {
-        JPanel panel = new JPanel() {
+    private DefaultTableModel buildDistanceModel() {
+        String[] columns = {"Vertex", "Distance", "Parent"};
+        DefaultTableModel model = new DefaultTableModel(columns, 0) {
             @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                        RenderingHints.VALUE_ANTIALIAS_ON);
-                int w = getWidth();
-                int h = getHeight();
-                g2.setColor(new Color(0x99, 0x99, 0x99));
-                g2.setFont(getFont().deriveFont(Font.PLAIN, 16f));
-                String s1 = "Область отображения графа";
-                String s2 = "(отрисовка — задача визуализации, класс GraphPanel)";
-                FontMetrics fm = g2.getFontMetrics();
-                g2.drawString(s1, w / 2 - fm.stringWidth(s1) / 2, h / 2 - 6);
-                g2.setFont(getFont().deriveFont(Font.PLAIN, 12f));
-                fm = g2.getFontMetrics();
-                g2.drawString(s2, w / 2 - fm.stringWidth(s2) / 2, h / 2 + 16);
-                g2.dispose();
+            public boolean isCellEditable(int row, int column) {
+                return false; // таблица только для просмотра
             }
         };
-        panel.setBackground(Color.WHITE);
-        // Размер больше окна — чтобы на прототипе были видны ползунки прокрутки.
-        panel.setPreferredSize(new Dimension(900, 700));
-        return panel;
+        Vertex source = graph.getSource();
+        for (Vertex v : graph.getVertices()) {
+            boolean isSource = (v == source);
+            model.addRow(new Object[]{
+                    v.getName(),
+                    isSource ? "0" : "—",
+                    isSource ? "-" : "—"
+            });
+        }
+        return model;
     }
 
     /**
@@ -213,12 +188,11 @@ public class MainWindow extends JFrame {
         explanationArea.setWrapStyleWord(true);
         explanationArea.setFont(explanationArea.getFont().deriveFont(Font.PLAIN, 13f));
         explanationArea.setText("Здесь будет отображаться пояснение текущего шага алгоритма.\n"
-                + "На этапе прототипа это область-заглушка без данных.");
+                + "На этапе прототипа алгоритм ещё не подключён — показан исходный граф.");
 
         JScrollPane explanationScroll = new JScrollPane(explanationArea);
         explanationScroll.setBorder(BorderFactory.createTitledBorder("Пояснение шага"));
 
-        // Строка состояния: текущий проход и текущий шаг.
         JPanel status = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 4));
         status.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
         passLabel = new JLabel("Проход: 0 из 0");

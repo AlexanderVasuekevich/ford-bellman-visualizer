@@ -1,4 +1,4 @@
-package main.java.visualizer.ui;
+package visualizer.ui;
 
 import javax.swing.*;
 import java.awt.*;

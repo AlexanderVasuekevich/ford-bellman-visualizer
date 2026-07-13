@@ -1,13 +1,22 @@
-package main.java.visualizer.ui;
+package visualizer.ui;
+
+import visualizer.model.Edge;
+import visualizer.model.Graph;
+import visualizer.model.Vertex;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class GraphPanel extends JPanel {
     private static final int VERTEX_RADIUS = 20;
 
-    // Данные для макета
-    private final Object[][] vertices = {
+    // Данные для отрисовки. По умолчанию — демонстрационный граф (для TestUI).
+    // Через конструктор GraphPanel(Graph) заполняются из модели данных.
+    private Object[][] vertices = {
         {"A", 400, 240},
         {"B", 240, 390},
         {"C", 80, 240},
@@ -15,18 +24,51 @@ public class GraphPanel extends JPanel {
     };
 
     // Ребра графа: {Индекс_Старта, Индекс_Конца, Вес}
-    private final int[][] edges = {
-        {2, 3, 3},  
-        {2, 0, 8},  
-        {2, 1, -2},  
-        {1, 0, 5}    
+    private int[][] edges = {
+        {2, 3, 3},
+        {2, 0, 8},
+        {2, 1, -2},
+        {1, 0, 5}
     };
     private int currentProcessingEdgeIndex = 1;
+
+    /** Конструктор по умолчанию: демонстрационный граф (используется в TestUI). */
+    public GraphPanel() {
+        setBackground(Color.WHITE);
+    }
+
+    /**
+     * Конструктор для интеграции: строит отображаемый граф из модели данных
+     * (класс visualizer.model.Graph). Координаты берутся из вершин модели.
+     * Используется главным окном на этапе прототипа (мок-граф).
+     */
+    public GraphPanel(Graph graph) {
+        this();
+        List<Vertex> vs = new ArrayList<>(graph.getVertices());
+        Map<Vertex, Integer> index = new HashMap<>();
+        vertices = new Object[vs.size()][3];
+        for (int i = 0; i < vs.size(); i++) {
+            Vertex v = vs.get(i);
+            vertices[i] = new Object[]{v.getName(), v.getX(), v.getY()};
+            index.put(v, i);
+        }
+        List<Edge> es = graph.getEdges();
+        edges = new int[es.size()][3];
+        for (int i = 0; i < es.size(); i++) {
+            Edge e = es.get(i);
+            edges[i] = new int[]{index.get(e.getFrom()), index.get(e.getTo()), e.getWeight()};
+        }
+        // Для наглядности подсветим одно ребро (на прототипе — статично).
+        currentProcessingEdgeIndex = edges.length > 2 ? 2 : (edges.length > 0 ? 0 : -1);
+        // Размер холста с запасом, чтобы работали ползунки прокрутки при большом графе.
+        setPreferredSize(new Dimension(720, 320));
+    }
 
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         for (int i = 0; i < edges.length; i++) {
             boolean isActive = (i == currentProcessingEdgeIndex);
@@ -73,13 +115,13 @@ public class GraphPanel extends JPanel {
 
         int arrowX = x2 - (int) (VERTEX_RADIUS * Math.cos(angle));
         int arrowY = y2 - (int) (VERTEX_RADIUS * Math.sin(angle));
-        
+
         int arrowSize = 8;
         int x3 = arrowX - (int) (arrowSize * Math.cos(angle - Math.PI / 6));
         int y3 = arrowY - (int) (arrowSize * Math.sin(angle - Math.PI / 6));
         int x4 = arrowX - (int) (arrowSize * Math.cos(angle + Math.PI / 6));
         int y4 = arrowY - (int) (arrowSize * Math.sin(angle + Math.PI / 6));
-        
+
         g2d.drawLine(arrowX, arrowY, x3, y3);
         g2d.drawLine(arrowX, arrowY, x4, y4);
 

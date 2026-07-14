@@ -1,0 +1,4 @@
+VERTEX A
+VERTEX B
+
+EDGE A B 4

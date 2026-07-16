@@ -8,10 +8,6 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.BorderFactory;
 import java.awt.Dimension;
 
-/**
- * Разделитель главного окна: слева граф, справа таблица расстояний
- * @author Strizhkov Ivan
- */
 public class MainSplitPane extends JSplitPane {
     
     private GraphPanel graphPanel;

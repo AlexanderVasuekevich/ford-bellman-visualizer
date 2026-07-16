@@ -1,6 +1,7 @@
 package visualizer.ui;
 
-import visualizer.algorithm.AlgorithmStep;
+import visualizer.algorithm.BellmanFord;
+import visualizer.algorithm.StepState;
 import visualizer.model.Graph;
 import visualizer.model.Vertex;
 
@@ -38,7 +39,7 @@ public class DistanceTable extends JTable {
      * Обновление таблицы на основе шага алгоритма
      * @param step шаг алгоритма (если null - начальное состояние)
      */
-    public void refreshTable(AlgorithmStep step) {
+    public void refreshTable(StepState step) {
         model.setRowCount(0); // Очищаем таблицу
         
         for (Vertex v : graph.getVertices()) {
@@ -51,7 +52,7 @@ public class DistanceTable extends JTable {
                 Map<String, String> predecessors = step.getPredecessors();
                 
                 Integer dist = distances.get(name);
-                distStr = (dist == null || dist == 1000000000) ? "∞" : String.valueOf(dist);
+                distStr = (dist == null || dist == BellmanFord.INF) ? "∞" : String.valueOf(dist);
                 parentStr = predecessors.get(name);
                 if (parentStr == null) parentStr = "—";
             } else {

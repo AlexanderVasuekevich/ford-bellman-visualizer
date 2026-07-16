@@ -1,5 +1,7 @@
 package visualizer.ui;
 
+import visualizer.algorithm.StepState;
+import visualizer.model.Edge;
 import visualizer.model.Graph;
 
 import javax.swing.JSplitPane;
@@ -8,13 +10,22 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.BorderFactory;
 import java.awt.Dimension;
 
+/**
+ * Центральная область: слева граф (GraphPanel), справа таблица расстояний
+ * (DistanceTable), разделённые сплиттером.
+ *
+ * Автор структуры — Стрижков Иван. На Версии 2 переведён на StepState
+ * (единый тип шага, StepHistory Бурменского) вместо AlgorithmStep.
+ */
 public class MainSplitPane extends JSplitPane {
-    
-    private GraphPanel graphPanel;
-    private DistanceTable distanceTable;
+
+    private final Graph graph;
+    private final GraphPanel graphPanel;
+    private final DistanceTable distanceTable;
 
     public MainSplitPane(Graph graph) {
         super(JSplitPane.HORIZONTAL_SPLIT);
+        this.graph = graph;
 
         graphPanel = new GraphPanel(graph);
         JScrollPane graphScroll = new JScrollPane(
@@ -36,19 +47,10 @@ public class MainSplitPane extends JSplitPane {
         tableScroll.setBorder(BorderFactory.createTitledBorder("Таблица расстояний"));
         tableScroll.setPreferredSize(new Dimension(260, 400));
 
-        this.setLeftComponent(graphScroll);
-        this.setRightComponent(tableScroll);
-        this.setResizeWeight(1.0);
-        this.setDividerLocation(820);
-    }
-
-    public void setGraph(Graph graph) {
-        if (graphPanel != null) {
-            graphPanel.setGraph(graph);
-        }
-        if (distanceTable != null) {
-            distanceTable.refreshTable(null);
-        }
+        setLeftComponent(graphScroll);
+        setRightComponent(tableScroll);
+        setResizeWeight(1.0);
+        setDividerLocation(820);
     }
 
     public GraphPanel getGraphPanel() {
@@ -60,32 +62,29 @@ public class MainSplitPane extends JSplitPane {
     }
 
     public void clearHighlight() {
-        if (graphPanel != null) {
-            graphPanel.clearHighlight();
-        }
+        graphPanel.clearHighlight();
     }
 
-    public void updateViewport() {
-        revalidate();
-        repaint();
-    }
+    /**
+     * Обновляет граф и таблицу под текущий шаг алгоритма.
+     * Подсвечивает текущее ребро, начальную/конечную/обновлённую вершины,
+     * показывает расстояния и предшественников.
+     *
+     * @param step состояние шага (если {@code null} — начальное состояние)
+     */
+    public void updateStep(StepState step) {
+        if (step != null) {
+            Edge edge = step.getCurrentEdge();
+            int edgeIndex = (edge == null) ? -1 : graph.getEdges().indexOf(edge);
 
-    public void updateStep(visualizer.algorithm.AlgorithmStep step) {
-        if (step != null && graphPanel != null) {
-            graphPanel.setCurrentProcessingEdge(step.getEdgeIndex());
+            graphPanel.setCurrentProcessingEdge(edgeIndex);
             graphPanel.setDistances(step.getDistances());
             graphPanel.setPredecessors(step.getPredecessors());
-            
-            if (step.isRelaxed() && step.getToVertex() != null) {
-                graphPanel.setUpdatedVertex(step.getToVertex());
-            } else {
-                graphPanel.setUpdatedVertex(null);
-            }
+            graphPanel.setUpdatedVertex(step.isUpdated() ? step.getUpdatedVertexName() : null);
             graphPanel.repaint();
+        } else {
+            graphPanel.clearHighlight();
         }
-        
-        if (distanceTable != null) {
-            distanceTable.refreshTable(step);
-        }
+        distanceTable.refreshTable(step);
     }
 }

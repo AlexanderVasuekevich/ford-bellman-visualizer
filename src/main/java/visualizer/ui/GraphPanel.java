@@ -144,12 +144,27 @@ public class GraphPanel extends JPanel {
         int x2 = to.getX();
         int y2 = to.getY();
 
-        // Вычисляем точки на окружности вершины
         double angle = Math.atan2(y2 - y1, x2 - x1);
-        int startX = x1 + (int)(VERTEX_RADIUS * Math.cos(angle));
-        int startY = y1 + (int)(VERTEX_RADIUS * Math.sin(angle));
-        int endX = x2 - (int)(VERTEX_RADIUS * Math.cos(angle));
-        int endY = y2 - (int)(VERTEX_RADIUS * Math.sin(angle));
+
+        // Единичный перпендикуляр к направлению ребра. Для встречных рёбер
+        // (есть и A->B, и B->A) смещаем линию и подпись в сторону, чтобы они
+        // не накладывались друг на друга. Направление перпендикуляра зависит
+        // от направления ребра, поэтому встречные рёбра расходятся в разные
+        // стороны автоматически.
+        double perpX = -Math.sin(angle);
+        double perpY = Math.cos(angle);
+        double lineOffset = hasReverseEdge(edge) ? 14.0 : 0.0;
+
+        double ox1 = x1 + perpX * lineOffset;
+        double oy1 = y1 + perpY * lineOffset;
+        double ox2 = x2 + perpX * lineOffset;
+        double oy2 = y2 + perpY * lineOffset;
+
+        // Точки на окружностях вершин (с учётом смещения линии)
+        int startX = (int) (ox1 + VERTEX_RADIUS * Math.cos(angle));
+        int startY = (int) (oy1 + VERTEX_RADIUS * Math.sin(angle));
+        int endX = (int) (ox2 - VERTEX_RADIUS * Math.cos(angle));
+        int endY = (int) (oy2 - VERTEX_RADIUS * Math.sin(angle));
 
         // Настройка стиля линии
         if (isActive) {
@@ -172,18 +187,32 @@ public class GraphPanel extends JPanel {
 
         g2d.fillPolygon(new int[]{endX, x3, x4}, new int[]{endY, y3, y4}, 3);
 
-        // Рисуем вес ребра
-        int midX = (x1 + x2) / 2 + 15;
-        int midY = (y1 + y2) / 2 - 15;
-        
+        // Подпись веса — рядом со своей линией (сдвиг по перпендикуляру),
+        // поэтому у встречных рёбер веса стоят по разные стороны и не сливаются.
+        double labelOffset = lineOffset + 12.0;
+        int midX = (int) ((x1 + x2) / 2.0 + perpX * labelOffset);
+        int midY = (int) ((y1 + y2) / 2.0 + perpY * labelOffset);
+
         g2d.setColor(Color.WHITE);
         g2d.fillOval(midX - 12, midY - 10, 24, 20);
         g2d.setColor(Color.BLACK);
         g2d.setStroke(new BasicStroke(1.0f));
         g2d.drawOval(midX - 12, midY - 10, 24, 20);
-        
+
         g2d.setFont(new Font("Dialog", Font.BOLD, 14));
-        g2d.drawString(String.valueOf(weight), midX - 6, midY + 5);
+        String weightStr = String.valueOf(weight);
+        FontMetrics fm = g2d.getFontMetrics();
+        g2d.drawString(weightStr, midX - fm.stringWidth(weightStr) / 2, midY + 5);
+    }
+
+    /** Проверяет, есть ли в графе встречное ребро (to -> from) для данного. */
+    private boolean hasReverseEdge(Edge edge) {
+        for (Edge other : edgeList) {
+            if (other.getFrom().equals(edge.getTo()) && other.getTo().equals(edge.getFrom())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void drawVertex(Graphics2D g2d, Vertex vertex, boolean isFrom, boolean isTo, boolean isUpdated) {

@@ -11,12 +11,12 @@ import java.util.List;
 
 public class GraphPanel extends JPanel {
     private static final int VERTEX_RADIUS = 25;
-    private static final int VERTEX_SPACING = 80;
     
     private Graph graph;
     private List<Vertex> vertexList;
     private List<Edge> edgeList;
     private int currentProcessingEdgeIndex = -1;
+    private String updatedVertexName = null; // Вершина, у которой обновилось расстояние
     private Map<String, Integer> distances;
     private Map<String, String> predecessors;
     private boolean showDistances = false;
@@ -73,6 +73,11 @@ public class GraphPanel extends JPanel {
         repaint();
     }
 
+    public void setUpdatedVertex(String vertexName) {
+        this.updatedVertexName = vertexName;
+        repaint();
+    }
+
     public void setDistances(Map<String, Integer> distances) {
         this.distances = distances;
         this.showDistances = true;
@@ -86,6 +91,7 @@ public class GraphPanel extends JPanel {
 
     public void clearHighlight() {
         this.currentProcessingEdgeIndex = -1;
+        this.updatedVertexName = null;
         repaint();
     }
 
@@ -110,12 +116,21 @@ public class GraphPanel extends JPanel {
 
         // Рисуем вершины
         for (Vertex v : vertexList) {
-            boolean isActive = false;
+            boolean isFrom = false;
+            boolean isTo = false;
+            boolean isUpdated = false;
+            
             if (currentProcessingEdgeIndex >= 0 && currentProcessingEdgeIndex < edgeList.size()) {
                 Edge edge = edgeList.get(currentProcessingEdgeIndex);
-                isActive = v.equals(edge.getFrom()) || v.equals(edge.getTo());
+                isFrom = v.equals(edge.getFrom());
+                isTo = v.equals(edge.getTo());
             }
-            drawVertex(g2d, v, isActive);
+            
+            if (updatedVertexName != null && v.getName().equals(updatedVertexName)) {
+                isUpdated = true;
+            }
+            
+            drawVertex(g2d, v, isFrom, isTo, isUpdated);
         }
     }
 
@@ -138,7 +153,7 @@ public class GraphPanel extends JPanel {
 
         // Настройка стиля линии
         if (isActive) {
-            g2d.setColor(new Color(255, 0, 0));
+            g2d.setColor(new Color(255, 0, 0)); // Красный - текущее ребро
             g2d.setStroke(new BasicStroke(4.0f));
         } else {
             g2d.setColor(Color.BLACK);
@@ -171,7 +186,7 @@ public class GraphPanel extends JPanel {
         g2d.drawString(String.valueOf(weight), midX - 6, midY + 5);
     }
 
-    private void drawVertex(Graphics2D g2d, Vertex vertex, boolean isActive) {
+    private void drawVertex(Graphics2D g2d, Vertex vertex, boolean isFrom, boolean isTo, boolean isUpdated) {
         String name = vertex.getName();
         int x = vertex.getX();
         int y = vertex.getY();
@@ -184,24 +199,38 @@ public class GraphPanel extends JPanel {
         g2d.setColor(new Color(200, 200, 200));
         g2d.fillOval(ovalX + 3, ovalY + 3, diameter, diameter);
 
-        // Заливка
-        if (isActive) {
-            g2d.setColor(new Color(255, 200, 200));
+        // Цвет заливки в зависимости от состояния
+        Color fillColor = Color.WHITE;
+        Color borderColor = Color.BLACK;
+        float borderWidth = 2.0f;
+
+        if (isUpdated) {
+            // Обновленная вершина - зеленый
+            fillColor = new Color(144, 238, 144); // Светло-зеленый
+            borderColor = new Color(0, 150, 0);
+            borderWidth = 4.0f;
+        } else if (isFrom) {
+            // Начальная вершина - оранжевый
+            fillColor = new Color(255, 200, 100);
+            borderColor = new Color(255, 140, 0);
+            borderWidth = 3.0f;
+        } else if (isTo) {
+            // Конечная вершина - желтый
+            fillColor = new Color(255, 255, 150);
+            borderColor = new Color(200, 200, 0);
+            borderWidth = 3.0f;
         } else if (distances != null && distances.containsKey(name) && distances.get(name) == 0) {
-            g2d.setColor(new Color(200, 255, 200)); // Стартовая вершина
-        } else {
-            g2d.setColor(Color.WHITE);
+            // Стартовая вершина
+            fillColor = new Color(200, 255, 200);
+            borderColor = new Color(0, 150, 0);
         }
+
+        g2d.setColor(fillColor);
         g2d.fillOval(ovalX, ovalY, diameter, diameter);
 
         // Контур
-        if (isActive) {
-            g2d.setColor(new Color(255, 0, 0));
-            g2d.setStroke(new BasicStroke(4.0f));
-        } else {
-            g2d.setColor(Color.BLACK);
-            g2d.setStroke(new BasicStroke(2.0f));
-        }
+        g2d.setColor(borderColor);
+        g2d.setStroke(new BasicStroke(borderWidth));
         g2d.drawOval(ovalX, ovalY, diameter, diameter);
 
         // Имя вершины
@@ -211,7 +240,7 @@ public class GraphPanel extends JPanel {
         int textWidth = fm.stringWidth(name);
         g2d.drawString(name, x - textWidth / 2, y + 5);
 
-        // Расстояние (если отображается)
+        // Расстояние
         if (showDistances && distances != null && distances.containsKey(name)) {
             Integer dist = distances.get(name);
             String distStr = (dist == null || dist == 1000000000) ? "∞" : String.valueOf(dist);
@@ -223,4 +252,17 @@ public class GraphPanel extends JPanel {
             g2d.drawString("d=" + distStr, x - textWidth / 2, y + VERTEX_RADIUS + 18);
         }
     }
+
+    public void updateSize() {
+    if (vertexList != null && !vertexList.isEmpty()) {
+        int maxX = 0;
+        int maxY = 0;
+        for (Vertex v : vertexList) {
+            maxX = Math.max(maxX, v.getX() + VERTEX_RADIUS + 50);
+            maxY = Math.max(maxY, v.getY() + VERTEX_RADIUS + 50);
+        }
+        setPreferredSize(new Dimension(Math.max(800, maxX), Math.max(600, maxY)));
+        revalidate();
+    }
+}
 }

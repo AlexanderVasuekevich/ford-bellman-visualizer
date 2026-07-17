@@ -1,138 +1,215 @@
 package visualizer.algorithm;
 
 import visualizer.model.Edge;
+import visualizer.model.Graph;
 import visualizer.model.Vertex;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Реализация алгоритма Форда-Беллмана с логированием шагов
+ * Реализация алгоритма Форда-Беллмана с генерацией истории шагов.
  */
-public class BellmanFord {
-    private Map<String, Integer> dist = new HashMap<>();
-    private Map<String, String> predecessors = new HashMap<>();
-    private List<AlgorithmStep> steps = new ArrayList<>();
-    private final int INF = 1000000000;
+public final class BellmanFord {
+    public static final int INF = 1000000000;
+
+    private BellmanFord() {
+    }
 
     /**
-     * Запуск алгоритма Форда-Беллмана
-     * @param vertices список вершин
-     * @param edges список ребер
-     * @param startVertex начальная вершина
-     * @return список шагов алгоритма для визуализации
+     * Формирует полную историю шагов алгоритма для пошаговой визуализации.
+     *
+     * @param graph граф со стартовой вершиной
+     * @return история состояний алгоритма
      */
-    public List<AlgorithmStep> run(List<Vertex> vertices, List<Edge> edges, Vertex startVertex) {
-        steps.clear();
-        
+    public static List<StepState> buildStepHistory(Graph graph) {
+        if (graph == null) {
+            throw new IllegalArgumentException("Graph must not be null");
+        }
+        if (graph.getSource() == null) {
+            throw new IllegalArgumentException("Graph source must be set");
+        }
+
+        List<Vertex> vertices = new ArrayList<>(graph.getVertices());
+        List<Edge> edges = graph.getEdges();
+        Map<String, Integer> distances = new LinkedHashMap<>();
+        Map<String, String> predecessors = new LinkedHashMap<>();
+        List<StepState> history = new ArrayList<>();
+
         for (Vertex vertex : vertices) {
-            dist.put(vertex.getName(), INF);
+            distances.put(vertex.getName(), INF);
             predecessors.put(vertex.getName(), null);
         }
-        dist.put(startVertex.getName(), 0);
-        
-        // Добавляем начальный шаг
-        steps.add(new AlgorithmStep(0, -1, null, null, 0, 
-            "Инициализация: расстояние до стартовой вершины '" + startVertex.getName() + "' = 0, остальные = ∞",
-            new HashMap<>(dist), new HashMap<>(predecessors)));
+        distances.put(graph.getSource().getName(), 0);
 
-        int v = vertices.size();
-        
-        for (int i = 1; i < v; i++) {
-            boolean anyRelaxed = false;
-            
-            for (int edgeIndex = 0; edgeIndex < edges.size(); edgeIndex++) {
-                Edge edge = edges.get(edgeIndex);
-                String fromName = edge.getFrom().getName();
-                String toName = edge.getTo().getName();
-                int weight = edge.getWeight();
-                
-                // Проверка условия релаксации
-                boolean relaxed = false;
-                String explanation = "";
-                
-                Integer distFrom = dist.get(fromName);
-                Integer distTo = dist.get(toName);
-                
-                if (distFrom != INF) {
-                    int newDist = distFrom + weight;
-                    if (newDist < distTo) {
-                        dist.put(toName, newDist);
-                        predecessors.put(toName, fromName);
-                        relaxed = true;
-                        anyRelaxed = true;
-                        explanation = String.format(
-                            "Релаксация: d[%s] (%d) + w(%d) = %d < d[%s] (%d) → обновляем d[%s] = %d",
-                            fromName, distFrom, weight, newDist, toName, distTo, toName, newDist
-                        );
-                    } else {
-                        explanation = String.format(
-                            "Проверка: d[%s] (%d) + w(%d) = %d ≥ d[%s] (%d) → без изменений",
-                            fromName, distFrom, weight, newDist, toName, distTo
-                        );
-                    }
-                } else {
-                    explanation = String.format(
-                        "Пропуск: d[%s] = ∞, ребро (%s → %s) не рассматривается",
-                        fromName, fromName, toName
-                    );
-                }
-                
-                // Сохрание шага
-                steps.add(new AlgorithmStep(
-                    i, 
-                    edgeIndex, 
-                    fromName, 
-                    toName, 
-                    weight,
-                    explanation,
-                    new HashMap<>(dist), 
-                    new HashMap<>(predecessors),
-                    relaxed
-                ));
-            }
-            
-            // Если ни одно расстояние не было обновлено - досрочный выход
-            if (!anyRelaxed) {
-                steps.add(new AlgorithmStep(
-                    i, -1, null, null, 0,
-                    "Проход " + i + ": ни одно расстояние не было обновлено → алгоритм завершен досрочно",
-                    new HashMap<>(dist), new HashMap<>(predecessors)
-                ));
-                break;
-            }
-        }
-
-        // Проверка на отрицательные циклы
-        for (Edge edge : edges) {
-            String fromName = edge.getFrom().getName();
-            String toName = edge.getTo().getName();
-            int weight = edge.getWeight();
-            
-            Integer distFrom = dist.get(fromName);
-            Integer distTo = dist.get(toName);
-            
-            if (distFrom != INF && distFrom + weight < distTo) {
-                throw new IllegalArgumentException("В графе обнаружен цикл отрицательного веса!");
-            }
-        }
-        
-        steps.add(new AlgorithmStep(
-            vertices.size(), -1, null, null, 0,
-            "Алгоритм завершен. Найдены кратчайшие расстояния от вершины '" + startVertex.getName() + "'",
-            new HashMap<>(dist), new HashMap<>(predecessors)
+        int stepNumber = 0;
+        int maxPass = Math.max(vertices.size() - 1, 0);
+        history.add(new StepState(
+                stepNumber,
+                0,
+                null,
+                distances,
+                predecessors,
+                StepExplanationBuilder.initial(graph.getSource().getName()),
+                false,
+                false,
+                null
         ));
-        
-        return steps;
+
+        for (int passNumber = 1; passNumber <= maxPass; passNumber++) {
+            for (Edge edge : edges) {
+                stepNumber++;
+                RelaxationResult result = relax(edge, distances, predecessors);
+                history.add(new StepState(
+                        stepNumber,
+                        passNumber,
+                        edge,
+                        distances,
+                        predecessors,
+                        StepExplanationBuilder.relaxation(stepNumber, passNumber, maxPass, edge, result),
+                        result.updated(),
+                        false,
+                        result.updated() ? edge.getTo().getName() : null
+                ));
+            }
+        }
+
+        // Дополнительный проход (V-й). После V-1 проходов расстояния должны
+        // стабилизироваться. Если на этом проходе какое-то расстояние всё ещё
+        // уменьшается — это и есть обнаружение отрицательного цикла. Здесь мы
+        // РЕАЛЬНО выполняем релаксации, чтобы пользователь видел сами итерации
+        // (как расстояния продолжают падать), а не только итоговое сообщение.
+        int negativeCyclePass = vertices.size();
+        boolean cycleFound = false;
+        Set<String> affectedVertices = new LinkedHashSet<>();
+        for (Edge edge : edges) {
+            stepNumber++;
+            RelaxationResult result = relax(edge, distances, predecessors);
+            if (result.updated()) {
+                cycleFound = true;
+                affectedVertices.addAll(findNegativeCycleAffectedVertices(edge.getTo().getName(), edges));
+            }
+
+            history.add(new StepState(
+                    stepNumber,
+                    negativeCyclePass,
+                    edge,
+                    distances,
+                    predecessors,
+                    StepExplanationBuilder.negativeCycleIteration(stepNumber, negativeCyclePass, edge, result),
+                    result.updated(),
+                    cycleFound,
+                    result.updated() ? edge.getTo().getName() : null,
+                    cycleFound ? Set.copyOf(affectedVertices) : Set.of()
+            ));
+        }
+
+        if (cycleFound) {
+            stepNumber++;
+            history.add(new StepState(
+                    stepNumber,
+                    negativeCyclePass,
+                    null,
+                    distances,
+                    predecessors,
+                    StepExplanationBuilder.negativeCycleConclusion(affectedVertices),
+                    false,
+                    true,
+                    null,
+                    Set.copyOf(affectedVertices)
+            ));
+            return history;
+        }
+
+        stepNumber++;
+        history.add(new StepState(
+                stepNumber,
+                maxPass,
+                null,
+                distances,
+                predecessors,
+                StepExplanationBuilder.finished(),
+                false,
+                false,
+                null
+        ));
+
+        return history;
     }
 
-    public Map<String, Integer> getDist() {
-        return dist;
+    private static RelaxationResult relax(
+            Edge edge,
+            Map<String, Integer> distances,
+            Map<String, String> predecessors
+    ) {
+        String fromName = edge.getFrom().getName();
+        String toName = edge.getTo().getName();
+        int fromDistance = distances.get(fromName);
+        int toDistance = distances.get(toName);
+
+        if (fromDistance == INF) {
+            return new RelaxationResult(false, fromDistance, toDistance, null);
+        }
+
+        int candidate = fromDistance + edge.getWeight();
+        if (candidate < toDistance) {
+            distances.put(toName, candidate);
+            predecessors.put(toName, fromName);
+            return new RelaxationResult(true, fromDistance, toDistance, candidate);
+        }
+
+        return new RelaxationResult(false, fromDistance, toDistance, candidate);
     }
 
-    public Map<String, String> getPredecessors() {
-        return predecessors;
+    private static RelaxationCheck checkRelaxation(Edge edge, Map<String, Integer> distances) {
+        String fromName = edge.getFrom().getName();
+        String toName = edge.getTo().getName();
+        int fromDistance = distances.get(fromName);
+        int toDistance = distances.get(toName);
+
+        if (fromDistance == INF) {
+            return new RelaxationCheck(false, fromDistance, toDistance, null);
+        }
+
+        int candidate = fromDistance + edge.getWeight();
+        return new RelaxationCheck(candidate < toDistance, fromDistance, toDistance, candidate);
+    }
+
+    private static Set<String> findNegativeCycleAffectedVertices(String startVertexName, List<Edge> edges) {
+        Set<String> affected = new LinkedHashSet<>();
+        collectReachableVertices(startVertexName, edges, affected);
+        return affected;
+    }
+
+    private static void collectReachableVertices(String vertexName, List<Edge> edges, Set<String> affected) {
+        if (!affected.add(vertexName)) {
+            return;
+        }
+
+        for (Edge edge : edges) {
+            if (edge.getFrom().getName().equals(vertexName)) {
+                collectReachableVertices(edge.getTo().getName(), edges, affected);
+            }
+        }
+    }
+
+    record RelaxationResult(
+            boolean updated,
+            int fromDistance,
+            int oldToDistance,
+            Integer candidateDistance
+    ) {
+    }
+
+    record RelaxationCheck(
+            boolean canRelax,
+            int fromDistance,
+            int toDistance,
+            Integer candidateDistance
+    ) {
     }
 }

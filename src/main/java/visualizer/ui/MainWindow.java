@@ -1,46 +1,61 @@
 package visualizer.ui;
 
+import visualizer.algorithm.StepHistory;
+import visualizer.algorithm.StepState;
+import visualizer.export.AlgorithmResultExporter;
+import visualizer.export.ResultOutputException;
 import visualizer.model.Graph;
-import visualizer.model.PrototypeGraphMock;
-import visualizer.model.Vertex;
+import visualizer.parser.GraphParseException;
+import visualizer.parser.GraphParser;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
-import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.JToolBar;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.io.File;
+import java.nio.file.Path;
 
 /**
  * Главное окно приложения «Визуализатор алгоритма Форда–Беллмана».
  *
- * Этап: ПРОТОТИП. Ответственный за окно: Васюкевич Александр (UI, интеграция).
+ * Этап: ВЕРСИЯ 2. Ответственный за окно и интеграцию: Васюкевич Александр.
  *
- * Окно объединяет части всей бригады:
- *   - вёрстка окна и панель управления — Васюкевич;
- *   - отрисовка графа (GraphPanel) — Стрижков;
- *   - модель данных и мок-граф (Graph, PrototypeGraphMock) — Бурменский.
+ * Возможности Версии 2 (моя часть):
+ *   - «Запустить» — строит историю шагов (StepHistory Бурменского) и
+ *     показывает начальное состояние;
+ *   - «Вперёд» / «Назад» — пошаговый проход истории с обновлением подсветки
+ *     графа, таблицы, пояснения и номеров прохода/шага;
+ *   - «Авто» — автоматический проход шагов через javax.swing.Timer с
+ *     интервалом из поля «Интервал, мс» (интервал применяется на лету);
+ *   - «Сохранить в файл» — экспорт результата (AlgorithmResultExporter);
+ *   - отрицательный цикл и ошибки файла обрабатываются без падения программы.
  *
- * Логика алгоритма пока не подключена: большинство кнопок без обработчиков
- * (нажатия ничего не выполняют). Работает кнопка «О разработчиках».
- * Таблица расстояний заполнена по мок-графу (расстояния ещё не вычислены).
+ * Шаги строятся и хранятся в StepHistory (по просьбе Бурменского).
+ * Режим редактирования графа — финальная версия, кнопка пока отключена.
  */
 public class MainWindow extends JFrame {
 
-    // --- Элементы управления (панель сверху) ---
+    private static final int MIN_INTERVAL_MS = 100;
+    private static final int DEFAULT_INTERVAL_MS = 1000;
+
+    // --- Панель управления ---
     private JButton loadButton;
     private JButton saveButton;
     private JButton runButton;
@@ -51,17 +66,17 @@ public class MainWindow extends JFrame {
     private JToggleButton editButton;
     private JButton aboutButton;
 
-    // --- Центр / право / низ ---
-    private GraphPanel graphPanel;
-    private JTable distanceTable;
+    // --- Центр / низ ---
+    private JPanel centerHolder;
+    private MainSplitPane split;
     private JTextArea explanationArea;
-
-    // --- Индикаторы состояния ---
     private JLabel passLabel;
     private JLabel stepLabel;
 
-    // Мок-граф из модели данных (Бурменский) — показывается на прототипе.
-    private final Graph graph = PrototypeGraphMock.createGraph();
+    // --- Состояние ---
+    private Graph currentGraph;
+    private StepHistory history;
+    private Timer autoTimer;
 
     public MainWindow() {
         super("Визуализатор алгоритма Форда–Беллмана");
@@ -69,18 +84,15 @@ public class MainWindow extends JFrame {
 
         setLayout(new BorderLayout());
         add(buildToolBar(), BorderLayout.NORTH);
-        add(buildCenterAndRight(), BorderLayout.CENTER);
+        add(buildCenter(), BorderLayout.CENTER);
         add(buildBottomPanel(), BorderLayout.SOUTH);
 
         setMinimumSize(new Dimension(900, 600));
         setSize(1100, 720);
-        setLocationRelativeTo(null); // по центру экрана
+        setLocationRelativeTo(null);
+        updateControls();
     }
 
-    /**
-     * Панель управления сверху со всеми кнопками и полем интервала.
-     * Кроме «О разработчиках», обработчики не привязаны (этап прототипа).
-     */
     private JToolBar buildToolBar() {
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
@@ -89,7 +101,6 @@ public class MainWindow extends JFrame {
 
         loadButton = new JButton("Загрузить файл");
         saveButton = new JButton("Сохранить в файл");
-        saveButton.setToolTipText("Сохранить результат работы алгоритма в файл (реализуется в версии 2)");
         runButton = new JButton("Запустить");
         prevButton = new JButton("← Назад");
         nextButton = new JButton("Вперёд →");
@@ -97,14 +108,28 @@ public class MainWindow extends JFrame {
         editButton = new JToggleButton("Редактировать");
         aboutButton = new JButton("О разработчиках");
 
-        // Единственный подключённый обработчик на прототипе —
-        // модальное окно «О разработчиках» (класс AboutDialog, Стрижков).
-        aboutButton.addActionListener(e -> AboutDialog.show(this));
-
-        intervalField = new JTextField("1000", 5);
+        intervalField = new JTextField(String.valueOf(DEFAULT_INTERVAL_MS), 5);
         intervalField.setMaximumSize(new Dimension(60, 28));
         intervalField.setToolTipText("Интервал автоматического режима, мс");
         JLabel intervalLabel = new JLabel("Интервал, мс:");
+
+        editButton.setEnabled(false);
+        editButton.setToolTipText("Реализуется в финальной версии");
+
+        loadButton.addActionListener(e -> chooseAndLoad());
+        runButton.addActionListener(e -> runAlgorithm());
+        prevButton.addActionListener(e -> stepBackward());
+        nextButton.addActionListener(e -> stepForward());
+        saveButton.addActionListener(e -> chooseAndSave());
+        aboutButton.addActionListener(e -> AboutDialog.show(this));
+        autoButton.addActionListener(e -> toggleAuto());
+
+        // Интервал применяется на лету, если авто-режим уже идёт.
+        intervalField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { applyInterval(); }
+            @Override public void removeUpdate(DocumentEvent e) { applyInterval(); }
+            @Override public void changedUpdate(DocumentEvent e) { applyInterval(); }
+        });
 
         toolBar.add(loadButton);
         toolBar.add(saveButton);
@@ -119,88 +144,37 @@ public class MainWindow extends JFrame {
         toolBar.add(intervalField);
         toolBar.addSeparator();
         toolBar.add(editButton);
-        toolBar.add(Box.createHorizontalGlue()); // прижать «О разработчиках» вправо
+        toolBar.add(Box.createHorizontalGlue());
         toolBar.add(aboutButton);
 
         return toolBar;
     }
 
-    /**
-     * Центральная часть: слева — область графа (GraphPanel Стрижкова,
-     * отрисовывает мок-граф) с прокруткой; справа — таблица расстояний.
-     */
-    private JSplitPane buildCenterAndRight() {
-        graphPanel = new GraphPanel(graph);
-        JScrollPane graphScroll = new JScrollPane(
-                graphPanel,
-                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        graphScroll.setBorder(BorderFactory.createTitledBorder("Граф"));
-
-        distanceTable = new JTable(buildDistanceModel());
-        distanceTable.setRowHeight(24);
-        distanceTable.getTableHeader().setReorderingAllowed(false);
-
-        JScrollPane tableScroll = new JScrollPane(
-                distanceTable,
-                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        tableScroll.setBorder(BorderFactory.createTitledBorder("Таблица расстояний"));
-        tableScroll.setPreferredSize(new Dimension(260, 400));
-
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                graphScroll, tableScroll);
-        split.setResizeWeight(1.0);   // при растягивании окна растёт область графа
-        split.setDividerLocation(820);
-        return split;
+    private JPanel buildCenter() {
+        centerHolder = new JPanel(new BorderLayout());
+        split = new MainSplitPane(new Graph()); // пустой граф до загрузки
+        centerHolder.add(split, BorderLayout.CENTER);
+        return centerHolder;
     }
 
-    /**
-     * Таблица расстояний строится по вершинам мок-графа. Расстояния ещё не
-     * вычислены (алгоритм не подключён): у источника — 0, у остальных — «—».
-     */
-    private DefaultTableModel buildDistanceModel() {
-        String[] columns = {"Vertex", "Distance", "Parent"};
-        DefaultTableModel model = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false; // таблица только для просмотра
-            }
-        };
-        Vertex source = graph.getSource();
-        for (Vertex v : graph.getVertices()) {
-            boolean isSource = (v == source);
-            model.addRow(new Object[]{
-                    v.getName(),
-                    isSource ? "0" : "—",
-                    isSource ? "-" : "—"
-            });
-        }
-        return model;
-    }
-
-    /**
-     * Нижняя часть: область текстового пояснения текущего шага
-     * и строка состояния с номерами прохода и шага.
-     */
     private JPanel buildBottomPanel() {
         JPanel bottom = new JPanel(new BorderLayout());
 
-        explanationArea = new JTextArea(4, 20);
+        explanationArea = new JTextArea(6, 20);
         explanationArea.setEditable(false);
         explanationArea.setLineWrap(true);
         explanationArea.setWrapStyleWord(true);
-        explanationArea.setFont(explanationArea.getFont().deriveFont(Font.PLAIN, 13f));
-        explanationArea.setText("Здесь будет отображаться пояснение текущего шага алгоритма.\n"
-                + "На этапе прототипа алгоритм ещё не подключён — показан исходный граф.");
+        explanationArea.setFont(new Font("Monospaced", Font.PLAIN, 13));
+        explanationArea.setText("Нажмите «Загрузить файл», затем «Запустить». "
+                + "Шаги проходятся кнопками «Назад»/«Вперёд» или в авто-режиме.");
 
         JScrollPane explanationScroll = new JScrollPane(explanationArea);
         explanationScroll.setBorder(BorderFactory.createTitledBorder("Пояснение шага"));
 
         JPanel status = new JPanel(new FlowLayout(FlowLayout.LEFT, 16, 4));
         status.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
-        passLabel = new JLabel("Проход: 0 из 0");
-        stepLabel = new JLabel("Шаг: 0");
+        passLabel = new JLabel("Проход: —");
+        stepLabel = new JLabel("Шаг: —");
         passLabel.setFont(passLabel.getFont().deriveFont(Font.BOLD));
         stepLabel.setFont(stepLabel.getFont().deriveFont(Font.BOLD));
         status.add(passLabel);
@@ -209,7 +183,203 @@ public class MainWindow extends JFrame {
 
         bottom.add(explanationScroll, BorderLayout.CENTER);
         bottom.add(status, BorderLayout.SOUTH);
-        bottom.setPreferredSize(new Dimension(100, 150));
+        bottom.setPreferredSize(new Dimension(100, 190));
         return bottom;
+    }
+
+    // ---------- Загрузка ----------
+
+    private void chooseAndLoad() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Выберите файл с графом");
+        chooser.setFileFilter(new FileNameExtensionFilter("Текстовый файл графа (*.txt)", "txt"));
+        File testData = new File("test-data");
+        if (testData.isDirectory()) {
+            chooser.setCurrentDirectory(testData);
+        }
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            loadGraph(chooser.getSelectedFile().toPath());
+        }
+    }
+
+    /**
+     * Загружает граф из файла и показывает его. Ошибки файла выводятся через
+     * модальное окно и не роняют приложение.
+     */
+    public void loadGraph(Path path) {
+        try {
+            Graph graph = GraphParser.parse(path);
+            stopAuto();
+            currentGraph = graph;
+            history = null;
+
+            split = new MainSplitPane(graph);
+            centerHolder.removeAll();
+            centerHolder.add(split, BorderLayout.CENTER);
+            centerHolder.revalidate();
+            centerHolder.repaint();
+            split.getGraphPanel().updateSize();
+
+            explanationArea.setText("Граф загружен: вершин — " + graph.getVertexCount()
+                    + ", рёбер — " + graph.getEdgeCount()
+                    + ", источник — " + graph.getSource().getName() + ".\n"
+                    + "Нажмите «Запустить».");
+            passLabel.setText("Проход: —");
+            stepLabel.setText("Шаг: —");
+            updateControls();
+        } catch (GraphParseException ex) {
+            MessageDialog.show(this, "Ошибка загрузки файла", ex.getMessage());
+        }
+    }
+
+    // ---------- Запуск и навигация ----------
+
+    /** Строит историю шагов и показывает начальное состояние алгоритма. */
+    public void runAlgorithm() {
+        if (currentGraph == null) {
+            MessageDialog.show(this, "Граф не загружен", "Сначала загрузите файл с графом.");
+            return;
+        }
+        try {
+            stopAuto();
+            history = StepHistory.fromGraph(currentGraph);
+            if (history.isEmpty()) {
+                MessageDialog.show(this, "Нет шагов", "Не удалось построить шаги алгоритма.");
+                history = null;
+                return;
+            }
+            showStep(); // начальное состояние (шаг инициализации)
+            updateControls();
+            // Отрицательный цикл не показываем всплывающим окном: он наглядно
+            // виден при проходе шагов (дополнительный проход, где расстояния
+            // продолжают уменьшаться) и в сохранённом файле результата.
+        } catch (RuntimeException ex) {
+            MessageDialog.show(this, "Ошибка алгоритма",
+                    ex.getMessage() != null ? ex.getMessage() : "Не удалось выполнить алгоритм.");
+            history = null;
+            updateControls();
+        }
+    }
+
+    /** Переход к следующему шагу. */
+    public void stepForward() {
+        if (history != null && history.hasNext()) {
+            history.next();
+            showStep();
+            updateControls();
+        }
+    }
+
+    /** Переход к предыдущему шагу. */
+    public void stepBackward() {
+        if (history != null && history.hasPrevious()) {
+            history.previous();
+            showStep();
+            updateControls();
+        }
+    }
+
+    /** Отрисовывает текущий шаг: граф, таблица, пояснение, номера. */
+    private void showStep() {
+        StepState step = history.current();
+        split.updateStep(step);
+        if (step != null) {
+            explanationArea.setText(step.getExplanation());
+            explanationArea.setCaretPosition(0);
+            passLabel.setText("Проход: " + step.getPassNumber());
+            stepLabel.setText("Шаг: " + step.getStepNumber() + " из " + (history.size() - 1));
+        }
+    }
+
+    // ---------- Авто-режим ----------
+
+    private void toggleAuto() {
+        if (autoButton.isSelected()) {
+            startAuto();
+        } else {
+            stopAuto();
+        }
+    }
+
+    private void startAuto() {
+        if (history == null || !history.hasNext()) {
+            autoButton.setSelected(false);
+            return;
+        }
+        autoTimer = new Timer(readInterval(), e -> {
+            if (history != null && history.hasNext()) {
+                history.next();
+                showStep();
+                if (!history.hasNext()) {
+                    stopAuto();
+                }
+            } else {
+                stopAuto();
+            }
+        });
+        autoTimer.start();
+        updateControls();
+    }
+
+    private void stopAuto() {
+        if (autoTimer != null) {
+            autoTimer.stop();
+            autoTimer = null;
+        }
+        autoButton.setSelected(false);
+        updateControls();
+    }
+
+    private void applyInterval() {
+        if (autoTimer != null && autoTimer.isRunning()) {
+            autoTimer.setDelay(readInterval());
+        }
+    }
+
+    private int readInterval() {
+        try {
+            int value = Integer.parseInt(intervalField.getText().trim());
+            return Math.max(MIN_INTERVAL_MS, value);
+        } catch (NumberFormatException ex) {
+            return DEFAULT_INTERVAL_MS;
+        }
+    }
+
+    // ---------- Сохранение ----------
+
+    private void chooseAndSave() {
+        if (history == null) {
+            MessageDialog.show(this, "Нет результата", "Сначала запустите алгоритм («Запустить»).");
+            return;
+        }
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Сохранить результат");
+        chooser.setSelectedFile(new File("result.txt"));
+        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            Path path = chooser.getSelectedFile().toPath();
+            try {
+                AlgorithmResultExporter.save(currentGraph, history, path);
+                JOptionPane.showMessageDialog(this, "Результат сохранён:\n" + path,
+                        "Сохранено", JOptionPane.INFORMATION_MESSAGE);
+            } catch (ResultOutputException ex) {
+                MessageDialog.show(this, "Ошибка сохранения", ex.getMessage());
+            }
+        }
+    }
+
+    // ---------- Состояние кнопок ----------
+
+    /** Включает/выключает кнопки в зависимости от текущего состояния. */
+    private void updateControls() {
+        boolean graphLoaded = currentGraph != null;
+        boolean hasHistory = history != null;
+        boolean autoRunning = autoTimer != null && autoTimer.isRunning();
+
+        runButton.setEnabled(graphLoaded && !autoRunning);
+        saveButton.setEnabled(hasHistory && !autoRunning);
+        loadButton.setEnabled(!autoRunning);
+        autoButton.setEnabled(hasHistory && (history.hasNext() || autoRunning));
+        prevButton.setEnabled(hasHistory && history.hasPrevious() && !autoRunning);
+        nextButton.setEnabled(hasHistory && history.hasNext() && !autoRunning);
     }
 }

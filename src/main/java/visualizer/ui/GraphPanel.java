@@ -146,11 +146,8 @@ public class GraphPanel extends JPanel {
 
         double angle = Math.atan2(y2 - y1, x2 - x1);
 
-        // Единичный перпендикуляр к направлению ребра. Для встречных рёбер
-        // (есть и A->B, и B->A) смещаем линию и подпись в сторону, чтобы они
-        // не накладывались друг на друга. Направление перпендикуляра зависит
-        // от направления ребра, поэтому встречные рёбра расходятся в разные
-        // стороны автоматически.
+        // Для встречных рёбер (A->B и B->A) смещаем линию и подпись в сторону,
+        // чтобы они не накладывались. Обычные одиночные рёбра остаются прямыми.
         double perpX = -Math.sin(angle);
         double perpY = Math.cos(angle);
         double lineOffset = hasReverseEdge(edge) ? 14.0 : 0.0;
@@ -160,7 +157,6 @@ public class GraphPanel extends JPanel {
         double ox2 = x2 + perpX * lineOffset;
         double oy2 = y2 + perpY * lineOffset;
 
-        // Точки на окружностях вершин (с учётом смещения линии)
         int startX = (int) (ox1 + VERTEX_RADIUS * Math.cos(angle));
         int startY = (int) (oy1 + VERTEX_RADIUS * Math.sin(angle));
         int endX = (int) (ox2 - VERTEX_RADIUS * Math.cos(angle));
@@ -187,22 +183,27 @@ public class GraphPanel extends JPanel {
 
         g2d.fillPolygon(new int[]{endX, x3, x4}, new int[]{endY, y3, y4}, 3);
 
-        // Подпись веса — рядом со своей линией (сдвиг по перпендикуляру),
-        // поэтому у встречных рёбер веса стоят по разные стороны и не сливаются.
+        // Подпись веса находится рядом со своей линией. У встречных рёбер
+        // направления перпендикуляра противоположные, поэтому подписи расходятся.
         double labelOffset = lineOffset + 12.0;
-        int midX = (int) ((x1 + x2) / 2.0 + perpX * labelOffset);
-        int midY = (int) ((y1 + y2) / 2.0 + perpY * labelOffset);
-
-        g2d.setColor(Color.WHITE);
-        g2d.fillOval(midX - 12, midY - 10, 24, 20);
-        g2d.setColor(Color.BLACK);
-        g2d.setStroke(new BasicStroke(1.0f));
-        g2d.drawOval(midX - 12, midY - 10, 24, 20);
+        int textX = (int) ((x1 + x2) / 2.0 + perpX * labelOffset);
+        int textY = (int) ((y1 + y2) / 2.0 + perpY * labelOffset);
 
         g2d.setFont(new Font("Dialog", Font.BOLD, 14));
-        String weightStr = String.valueOf(weight);
         FontMetrics fm = g2d.getFontMetrics();
-        g2d.drawString(weightStr, midX - fm.stringWidth(weightStr) / 2, midY + 5);
+        String weightStr = String.valueOf(weight);
+        int textWidth = fm.stringWidth(weightStr);
+        int textHeight = fm.getAscent();
+
+        int bgWidth = Math.max(24, textWidth + 10);
+        int bgHeight = 20;
+
+        g2d.setColor(Color.WHITE);
+        g2d.fillOval(textX - bgWidth / 2, textY - bgHeight / 2, bgWidth, bgHeight);
+        g2d.setColor(Color.BLACK);
+        g2d.setStroke(new BasicStroke(1.0f));
+        g2d.drawOval(textX - bgWidth / 2, textY - bgHeight / 2, bgWidth, bgHeight);
+        g2d.drawString(weightStr, textX - textWidth / 2, textY + textHeight / 2 - 2);
     }
 
     /** Проверяет, есть ли в графе встречное ребро (to -> from) для данного. */
@@ -214,6 +215,7 @@ public class GraphPanel extends JPanel {
         }
         return false;
     }
+
 
     private void drawVertex(Graphics2D g2d, Vertex vertex, boolean isFrom, boolean isTo, boolean isUpdated) {
         String name = vertex.getName();

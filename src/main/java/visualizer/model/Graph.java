@@ -99,6 +99,33 @@ public class Graph {
     }
 
     /**
+     * Заменяет содержимое графа копией другого графа.
+     *
+     * @param other граф-источник
+     */
+    public void replaceWith(Graph other) {
+        if (other == null) {
+            throw new IllegalArgumentException("Graph must not be null");
+        }
+
+        vertices.clear();
+        edges.clear();
+        source = null;
+
+        for (Vertex vertex : other.getVertices()) {
+            addVertex(vertex.getName(), vertex.getX(), vertex.getY());
+        }
+
+        if (other.getSource() != null) {
+            setSource(other.getSource().getName());
+        }
+
+        for (Edge edge : other.getEdges()) {
+            addEdge(edge.getFrom().getName(), edge.getTo().getName(), edge.getWeight());
+        }
+    }
+
+    /**
      * Возвращает вершину по имени или {@code null}, если вершина не найдена.
      *
      * @param name имя вершины

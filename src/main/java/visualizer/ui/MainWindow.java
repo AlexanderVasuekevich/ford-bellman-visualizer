@@ -30,6 +30,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -153,6 +154,7 @@ public class MainWindow extends JFrame {
     private JPanel buildCenter() {
         centerHolder = new JPanel(new BorderLayout());
         split = new MainSplitPane(new Graph()); // пустой граф до загрузки
+        configureGraphEditing();
         centerHolder.add(split, BorderLayout.CENTER);
         return centerHolder;
     }
@@ -214,6 +216,7 @@ public class MainWindow extends JFrame {
             history = null;
 
             split = new MainSplitPane(graph);
+            configureGraphEditing();
             centerHolder.removeAll();
             centerHolder.add(split, BorderLayout.CENTER);
             centerHolder.revalidate();
@@ -238,6 +241,15 @@ public class MainWindow extends JFrame {
     public void runAlgorithm() {
         if (currentGraph == null) {
             MessageDialog.show(this, "Граф не загружен", "Сначала загрузите файл с графом.");
+            return;
+        }
+        if (currentGraph.getVertexCount() == 0) {
+            MessageDialog.show(this, "Граф пуст", "Добавьте хотя бы одну вершину или загрузите файл с графом.");
+            return;
+        }
+        if (currentGraph.getSource() == null) {
+            MessageDialog.show(this, "Источник не задан",
+                    "Укажите стартовую вершину командой SOURCE в окне редактирования вершины.");
             return;
         }
         try {
@@ -306,7 +318,16 @@ public class MainWindow extends JFrame {
             autoButton.setSelected(false);
             return;
         }
-        autoTimer = new Timer(readInterval(), e -> {
+        int interval;
+        try {
+            interval = readInterval();
+        } catch (IllegalArgumentException ex) {
+            autoButton.setSelected(false);
+            MessageDialog.show(this, "Ошибка интервала", ex.getMessage());
+            return;
+        }
+
+        autoTimer = new Timer(interval, e -> {
             if (history != null && history.hasNext()) {
                 history.next();
                 showStep();
@@ -332,17 +353,35 @@ public class MainWindow extends JFrame {
 
     private void applyInterval() {
         if (autoTimer != null && autoTimer.isRunning()) {
-            autoTimer.setDelay(readInterval());
+            try {
+                autoTimer.setDelay(readInterval());
+            } catch (IllegalArgumentException ex) {
+                stopAuto();
+                MessageDialog.show(this, "Ошибка интервала", ex.getMessage());
+            }
         }
     }
 
     private int readInterval() {
-        try {
-            int value = Integer.parseInt(intervalField.getText().trim());
-            return Math.max(MIN_INTERVAL_MS, value);
-        } catch (NumberFormatException ex) {
-            return DEFAULT_INTERVAL_MS;
+        String text = intervalField.getText().trim();
+        if (text.isEmpty()) {
+            throw new IllegalArgumentException("Интервал автоматического режима не указан.");
         }
+
+        int value;
+        try {
+            value = Integer.parseInt(text);
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("Интервал должен быть целым числом миллисекунд.");
+        }
+
+        if (value < MIN_INTERVAL_MS) {
+            throw new IllegalArgumentException(
+                    "Интервал должен быть не меньше " + MIN_INTERVAL_MS + " мс."
+            );
+        }
+
+        return value;
     }
 
     // ---------- Сохранение ----------
@@ -357,6 +396,9 @@ public class MainWindow extends JFrame {
         chooser.setSelectedFile(new File("result.txt"));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             Path path = chooser.getSelectedFile().toPath();
+            if (Files.exists(path) && !confirmOverwrite(path)) {
+                return;
+            }
             try {
                 AlgorithmResultExporter.save(currentGraph, history, path);
                 JOptionPane.showMessageDialog(this, "Результат сохранён:\n" + path,
@@ -365,6 +407,33 @@ public class MainWindow extends JFrame {
                 MessageDialog.show(this, "Ошибка сохранения", ex.getMessage());
             }
         }
+    }
+
+    private void configureGraphEditing() {
+        split.setGraphChangedHandler(this::handleGraphEdited);
+    }
+
+    private void handleGraphEdited() {
+        stopAuto();
+        currentGraph = split.getGraph();
+        history = null;
+        split.clearHighlight();
+        split.refreshGraph();
+        explanationArea.setText("Граф изменён. Нажмите «Запустить», чтобы заново построить шаги алгоритма.");
+        passLabel.setText("Проход: —");
+        stepLabel.setText("Шаг: —");
+        updateControls();
+    }
+
+    private boolean confirmOverwrite(Path path) {
+        int result = JOptionPane.showConfirmDialog(
+                this,
+                "Файл уже существует:\n" + path + "\n\nПерезаписать его?",
+                "Подтверждение сохранения",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        return result == JOptionPane.YES_OPTION;
     }
 
     // ---------- Состояние кнопок ----------

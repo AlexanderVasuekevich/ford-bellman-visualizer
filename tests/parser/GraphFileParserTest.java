@@ -21,8 +21,10 @@ public final class GraphFileParserTest {
     private static final Path VALID_DATA_DIR = PROJECT_ROOT.resolve("test-data/valid");
     private static final Path INVALID_DATA_DIR = PROJECT_ROOT.resolve("test-data/invalid");
     private static final Map<String, String> VALID_CASE_NAMES = Map.of(
+            "bidirectional-graph.txt", "Корректный файл: встречные ребра",
             "bigger-graph.txt", "Корректный файл: большой граф",
             "disconnected-graph.txt", "Корректный файл: несвязный граф",
+            "negative-cycle.txt", "Корректный файл: отрицательный цикл",
             "negative-edges.txt", "Корректный файл: отрицательные ребра",
             "simple-graph.txt", "Корректный файл: простой граф"
     );

@@ -73,6 +73,15 @@ public class MainSplitPane extends JSplitPane {
         graphPanel.refreshGraph();
     }
 
+    /**
+     * Полностью сбрасывает данные алгоритма: подсветку, метки расстояний
+     * на графе и содержимое таблицы. Используется после редактирования графа.
+     */
+    public void resetAlgorithmView() {
+        graphPanel.clearAlgorithmData();
+        distanceTable.refreshTable(null);
+    }
+
     public void setEditMode(boolean editMode) {
         graphPanel.setEditMode(editMode);
     }

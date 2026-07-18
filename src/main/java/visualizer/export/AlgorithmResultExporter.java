@@ -86,6 +86,8 @@ public final class AlgorithmResultExporter {
         Map<String, Integer> distances = finalStep.getDistances();
         Map<String, String> predecessors = finalStep.getPredecessors();
         Set<String> affectedVertices = finalStep.getNegativeCycleAffectedVertices();
+        Set<String> cycleVertices = finalStep.getNegativeCycleVertices();
+        String sourceName = graph.getSource().getName();
 
         for (Vertex vertex : graph.getVertices()) {
             String name = vertex.getName();
@@ -94,14 +96,20 @@ public final class AlgorithmResultExporter {
 
             text.append(name).append("; ");
             if (affected) {
-                text.append("-∞; -; -; Не определено");
+                String status = cycleVertices.contains(name)
+                        ? "Не определено (лежит на отрицательном цикле)"
+                        : "Не определено (достижима из отрицательного цикла)";
+                text.append("-∞; -; -; ").append(status);
             } else if (unreachable) {
                 text.append("INF; -; -; Недостижима");
             } else {
+                String status = name.equals(sourceName)
+                        ? "Корректно"
+                        : "Корректно (не достижима из цикла)";
                 text.append(formatDistance(distances.get(name))).append("; ")
                         .append(formatParent(predecessors.get(name))).append("; ")
                         .append(buildPath(name, distances, predecessors)).append("; ")
-                        .append("Корректно");
+                        .append(status);
             }
             text.append("\n");
         }

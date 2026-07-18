@@ -35,7 +35,7 @@ public class Graph {
         validateVertexName(name);
 
         if (vertices.containsKey(name)) {
-            throw new IllegalArgumentException("Vertex already exists: " + name);
+            throw new IllegalArgumentException("Вершина уже существует: " + name + ".");
         }
 
         vertices.put(name, new Vertex(name, x, y));
@@ -68,7 +68,7 @@ public class Graph {
 
         Vertex vertex = getRequiredVertex(oldName);
         if (vertices.containsKey(newName)) {
-            throw new IllegalArgumentException("Vertex already exists: " + newName);
+            throw new IllegalArgumentException("Вершина уже существует: " + newName + ".");
         }
 
         vertices.remove(oldName);
@@ -236,14 +236,15 @@ public class Graph {
     private Vertex getRequiredVertex(String name) {
         Vertex vertex = vertices.get(name);
         if (vertex == null) {
-            throw new IllegalArgumentException("Vertex does not exist: " + name);
+            throw new IllegalArgumentException("Вершина не существует: " + name
+                    + ". Сначала создайте её кликом по свободному месту.");
         }
         return vertex;
     }
 
     private void validateVertexName(String name) {
         if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Vertex name must not be blank");
+            throw new IllegalArgumentException("Имя вершины не может быть пустым.");
         }
     }
 }

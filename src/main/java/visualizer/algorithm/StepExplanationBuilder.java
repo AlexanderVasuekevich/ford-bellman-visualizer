@@ -2,6 +2,9 @@ package visualizer.algorithm;
 
 import visualizer.model.Edge;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -57,49 +60,6 @@ final class StepExplanationBuilder {
             text.append("Так как ").append(result.candidateDistance()).append(" не меньше ")
                     .append(formatDistance(result.oldToDistance()))
                     .append(", расстояние до вершины ").append(toName).append(" не изменяется.");
-        }
-
-        return text.toString();
-    }
-
-    static String negativeCycleCheck(
-            int stepNumber,
-            int passNumber,
-            Edge edge,
-            BellmanFord.RelaxationCheck check
-    ) {
-        String fromName = edge.getFrom().getName();
-        String toName = edge.getTo().getName();
-        Integer candidate = check.candidateDistance();
-        int weight = edge.getWeight();
-
-        StringBuilder text = new StringBuilder();
-        text.append("Проход ").append(passNumber).append(".\n");
-        text.append("Шаг ").append(stepNumber).append(".\n");
-        text.append("Проверка отрицательного цикла.\n");
-        text.append("Рассматривается ребро ").append(fromName).append(" -> ").append(toName)
-                .append(" с весом ").append(weight).append(".\n");
-        text.append("dist[").append(fromName).append("] = ").append(formatDistance(check.fromDistance())).append("\n");
-        text.append("dist[").append(toName).append("] = ").append(formatDistance(check.toDistance())).append("\n");
-
-        if (check.fromDistance() == BellmanFord.INF) {
-            text.append("Проверка невозможна: начальная вершина ребра недостижима.\n");
-            text.append("На этом ребре отрицательный цикл не обнаружен.");
-            return text.toString();
-        }
-
-        text.append("Проверка:\n");
-        text.append(check.fromDistance()).append(" + (").append(weight).append(") = ")
-                .append(candidate).append("\n");
-
-        if (check.canRelax()) {
-            text.append(candidate).append(" < ").append(formatDistance(check.toDistance()))
-                    .append(", значит после основных проходов расстояние все еще можно уменьшить.\n");
-            text.append("Обнаружен отрицательный цикл, достижимый из стартовой вершины.");
-        } else {
-            text.append("Так как ").append(candidate).append(" не меньше ")
-                    .append(formatDistance(check.toDistance()))
-                    .append(", на этом ребре отрицательный цикл не обнаружен.");
         }
 
         return text.toString();
@@ -162,8 +122,41 @@ final class StepExplanationBuilder {
         return text.toString();
     }
 
-    static String finished() {
-        return "Алгоритм завершен. Отрицательный цикл не обнаружен.";
+    /**
+     * Пояснение финального шага с восстановленными кратчайшими путями
+     * (Стрижков, Final: отображение путей в финальном результате).
+     */
+    static String finished(
+            String sourceName,
+            Map<String, Integer> distances,
+            Map<String, String> predecessors
+    ) {
+        StringBuilder text = new StringBuilder();
+        text.append("Алгоритм завершен. Отрицательный цикл не обнаружен.\n\n");
+        text.append("Восстановленные кратчайшие пути от вершины ").append(sourceName).append(":\n");
+
+        for (Map.Entry<String, Integer> entry : distances.entrySet()) {
+            String name = entry.getKey();
+            int distance = entry.getValue();
+            if (distance == BellmanFord.INF) {
+                text.append(name).append(": недостижима (INF)\n");
+            } else {
+                text.append(name).append(": dist = ").append(distance)
+                        .append(", путь: ").append(buildPath(name, predecessors)).append("\n");
+            }
+        }
+
+        return text.toString().stripTrailing();
+    }
+
+    private static String buildPath(String vertexName, Map<String, String> predecessors) {
+        Deque<String> path = new ArrayDeque<>();
+        String current = vertexName;
+        while (current != null) {
+            path.addFirst(current);
+            current = predecessors.get(current);
+        }
+        return String.join(" -> ", path);
     }
 
     private static String formatDistance(int distance) {

@@ -36,9 +36,9 @@ import java.nio.file.Path;
 /**
  * Главное окно приложения «Визуализатор алгоритма Форда–Беллмана».
  *
- * Этап: ВЕРСИЯ 2. Ответственный за окно и интеграцию: Васюкевич Александр.
+ * Этап: FINAL. Ответственный за окно и интеграцию: Васюкевич Александр.
  *
- * Возможности Версии 2 (моя часть):
+ * Возможности финальной версии (моя часть):
  *   - «Запустить» — строит историю шагов (StepHistory Бурменского) и
  *     показывает начальное состояние;
  *   - «Вперёд» / «Назад» — пошаговый проход истории с обновлением подсветки
@@ -46,10 +46,12 @@ import java.nio.file.Path;
  *   - «Авто» — автоматический проход шагов через javax.swing.Timer с
  *     интервалом из поля «Интервал, мс» (интервал применяется на лету);
  *   - «Сохранить в файл» — экспорт результата (AlgorithmResultExporter);
+ *   - «Редактировать» — режим ручного редактирования графа: клик по
+ *     свободному месту создаёт вершину, клик по вершине открывает окно
+ *     редактирования (VertexDialog, логика черновика — Бурменского);
  *   - отрицательный цикл и ошибки файла обрабатываются без падения программы.
  *
  * Шаги строятся и хранятся в StepHistory (по просьбе Бурменского).
- * Режим редактирования графа — финальная версия, кнопка пока отключена.
  */
 public class MainWindow extends JFrame {
 
@@ -114,10 +116,11 @@ public class MainWindow extends JFrame {
         intervalField.setToolTipText("Интервал автоматического режима, мс");
         JLabel intervalLabel = new JLabel("Интервал, мс:");
 
-        editButton.setEnabled(false);
-        editButton.setToolTipText("Реализуется в финальной версии");
+        editButton.setToolTipText("Режим редактирования: клик по свободному месту — новая вершина, "
+                + "клик по вершине — редактирование");
 
         loadButton.addActionListener(e -> chooseAndLoad());
+        editButton.addActionListener(e -> toggleEditMode());
         runButton.addActionListener(e -> runAlgorithm());
         prevButton.addActionListener(e -> stepBackward());
         nextButton.addActionListener(e -> stepForward());
@@ -411,13 +414,29 @@ public class MainWindow extends JFrame {
 
     private void configureGraphEditing() {
         split.setGraphChangedHandler(this::handleGraphEdited);
+        split.setEditMode(editButton != null && editButton.isSelected());
+    }
+
+    /** Включает или выключает режим ручного редактирования графа. */
+    private void toggleEditMode() {
+        boolean editing = editButton.isSelected();
+        if (editing) {
+            stopAuto();
+        }
+        split.setEditMode(editing);
+        if (editing) {
+            explanationArea.setText("Режим редактирования включён.\n"
+                    + "Клик по свободному месту — создать вершину, клик по вершине — редактировать её.\n"
+                    + "В окне вершины: команда «EDGE A B 10» добавляет ребро, «SOURCE» делает вершину стартовой.");
+        }
+        updateControls();
     }
 
     private void handleGraphEdited() {
         stopAuto();
         currentGraph = split.getGraph();
         history = null;
-        split.clearHighlight();
+        split.resetAlgorithmView();
         split.refreshGraph();
         explanationArea.setText("Граф изменён. Нажмите «Запустить», чтобы заново построить шаги алгоритма.");
         passLabel.setText("Проход: —");
@@ -450,5 +469,6 @@ public class MainWindow extends JFrame {
         autoButton.setEnabled(hasHistory && (history.hasNext() || autoRunning));
         prevButton.setEnabled(hasHistory && history.hasPrevious() && !autoRunning);
         nextButton.setEnabled(hasHistory && history.hasNext() && !autoRunning);
+        editButton.setEnabled(!autoRunning);
     }
 }

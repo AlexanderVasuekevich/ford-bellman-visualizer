@@ -24,6 +24,7 @@ public class GraphPanel extends JPanel {
     private boolean showDistances = false;
     private boolean editMode;
     private Runnable graphChangedHandler;
+    private Point panOrigin; // Точка начала перетаскивания средней кнопкой
 
     public GraphPanel() {
         setBackground(Color.WHITE);
@@ -37,6 +38,81 @@ public class GraphPanel extends JPanel {
                 handleEditClick(e);
             }
         });
+        installPanHandler();
+    }
+
+    /**
+     * Перетаскивание графа средней кнопкой мыши (Стрижков, Final).
+     * Пока средняя кнопка зажата, все вершины смещаются вслед за курсором.
+     */
+    private void installPanHandler() {
+        MouseAdapter panHandler = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isMiddleMouseButton(e)) {
+                    panOrigin = e.getPoint();
+                    setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (SwingUtilities.isMiddleMouseButton(e)) {
+                    panOrigin = null;
+                    updateCursor();
+                    updateSize();
+                }
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (panOrigin != null) {
+                    translateGraph(e.getX() - panOrigin.x, e.getY() - panOrigin.y);
+                    panOrigin = e.getPoint();
+                }
+            }
+        };
+        addMouseListener(panHandler);
+        addMouseMotionListener(panHandler);
+    }
+
+    /**
+     * Смещает все вершины графа на (dx, dy), не давая графу уйти
+     * за левый/верхний край холста.
+     */
+    private void translateGraph(int dx, int dy) {
+        if (vertexList == null || vertexList.isEmpty()) {
+            return;
+        }
+
+        int margin = VERTEX_RADIUS + 10;
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        for (Vertex v : vertexList) {
+            minX = Math.min(minX, v.getX() + dx);
+            minY = Math.min(minY, v.getY() + dy);
+        }
+        if (minX < margin) {
+            dx += margin - minX;
+        }
+        if (minY < margin) {
+            dy += margin - minY;
+        }
+        if (dx == 0 && dy == 0) {
+            return;
+        }
+
+        for (Vertex v : vertexList) {
+            v.setX(v.getX() + dx);
+            v.setY(v.getY() + dy);
+        }
+        repaint();
+    }
+
+    private void updateCursor() {
+        setCursor(editMode
+                ? Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR)
+                : Cursor.getDefaultCursor());
     }
 
     public GraphPanel(Graph graph) {
@@ -70,6 +146,7 @@ public class GraphPanel extends JPanel {
 
     public void setEditMode(boolean editMode) {
         this.editMode = editMode;
+        updateCursor();
     }
 
     public boolean isEditMode() {
@@ -128,6 +205,20 @@ public class GraphPanel extends JPanel {
     public void clearHighlight() {
         this.currentProcessingEdgeIndex = -1;
         this.updatedVertexName = null;
+        repaint();
+    }
+
+    /**
+     * Полный сброс данных алгоритма: подсветка, расстояния, предшественники.
+     * Нужен после редактирования графа, чтобы на холсте не оставались
+     * устаревшие метки «d=...» от предыдущего запуска.
+     */
+    public void clearAlgorithmData() {
+        this.currentProcessingEdgeIndex = -1;
+        this.updatedVertexName = null;
+        this.distances = null;
+        this.predecessors = null;
+        this.showDistances = false;
         repaint();
     }
 

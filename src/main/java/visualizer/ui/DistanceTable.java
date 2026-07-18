@@ -52,17 +52,17 @@ public class DistanceTable extends JTable {
                 Map<String, String> predecessors = step.getPredecessors();
                 
                 Integer dist = distances.get(name);
-                distStr = (dist == null || dist == BellmanFord.INF) ? "∞" : String.valueOf(dist);
+                distStr = (dist == null || dist == BellmanFord.INF) ? "INF" : String.valueOf(dist);
                 parentStr = predecessors.get(name);
-                if (parentStr == null) parentStr = "—";
+                if (parentStr == null) parentStr = "-";
             } else {
                 // Начальное состояние (до запуска алгоритма)
                 if (v == graph.getSource()) {
                     distStr = "0";
                     parentStr = "-";
                 } else {
-                    distStr = "∞";
-                    parentStr = "—";
+                    distStr = "INF";
+                    parentStr = "-";
                 }
             }
             

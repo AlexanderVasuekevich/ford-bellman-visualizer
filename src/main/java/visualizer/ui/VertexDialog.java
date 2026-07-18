@@ -8,6 +8,7 @@ import visualizer.parser.EditParser;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
+import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -23,6 +24,8 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GridLayout;
 import java.awt.Window;
@@ -48,7 +51,8 @@ public class VertexDialog extends JDialog {
     private final JList<Edge> edgeList = new JList<>(edgeListModel);
 
     public VertexDialog(Window parent, Graph graph, Vertex vertex, int x, int y, Runnable graphChangedHandler) {
-        super(parent, "Редактирование вершины", ModalityType.APPLICATION_MODAL);
+        super(parent, vertex == null ? "Создание вершины" : "Редактирование вершины",
+                ModalityType.APPLICATION_MODAL);
         this.graph = graph;
         this.draftGraph = copyGraph(graph);
         this.graphChangedHandler = graphChangedHandler;
@@ -66,7 +70,7 @@ public class VertexDialog extends JDialog {
         bindHandlers();
         refreshFields();
 
-        setSize(420, 360);
+        setSize(480, 420);
         setLocationRelativeTo(parent);
     }
 
@@ -108,17 +112,31 @@ public class VertexDialog extends JDialog {
 
     public void handleCommandEnter() {
         try {
-            applyPendingNameToDraft();
-            EditCommand command = EditParser.parse(commandField.getText());
-            switch (command.type()) {
-                case EDGE -> draftGraph.addEdge(command.fromName(), command.toName(), command.weight());
-                case SOURCE -> draftGraph.setSource(draftVertexName);
-            }
-            commandField.setText("");
+            applyPendingCommand();
             refreshEdgeList();
         } catch (RuntimeException ex) {
             showError(ex.getMessage());
         }
+    }
+
+    /**
+     * Применяет команду из поля ввода к черновику, если поле не пустое.
+     * Вызывается и по Enter, и при сохранении — чтобы набранная,
+     * но не подтверждённая Enter команда не терялась молча.
+     */
+    private void applyPendingCommand() {
+        String text = commandField.getText().trim();
+        if (text.isEmpty()) {
+            return;
+        }
+
+        applyPendingNameToDraft();
+        EditCommand command = EditParser.parse(text);
+        switch (command.type()) {
+            case EDGE -> draftGraph.addEdge(command.fromName(), command.toName(), command.weight());
+            case SOURCE -> draftGraph.setSource(draftVertexName);
+        }
+        commandField.setText("");
     }
 
     public void handleDeleteSelectedEdge() {
@@ -150,6 +168,7 @@ public class VertexDialog extends JDialog {
 
     public void handleSave() {
         try {
+            applyPendingCommand();
             applyPendingNameToDraft();
             graph.replaceWith(draftGraph);
             saved = true;
@@ -174,8 +193,19 @@ public class VertexDialog extends JDialog {
         fields.add(nameField);
         fields.add(new JLabel("Команда:"));
         fields.add(commandField);
+        commandField.setToolTipText("EDGE A B 10 — добавить ребро, SOURCE — сделать вершину стартовой");
+
+        JLabel hint = new JLabel("Команды: EDGE A B 10 — добавить ребро, "
+                + "SOURCE — сделать вершину стартовой. Enter — применить.");
+        hint.setFont(hint.getFont().deriveFont(Font.ITALIC, 11f));
+        hint.setBorder(BorderFactory.createEmptyBorder(4, 10, 0, 10));
+
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(fields, BorderLayout.CENTER);
+        north.add(hint, BorderLayout.SOUTH);
 
         edgeList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        edgeList.setToolTipText("Правый клик по ребру — удалить");
         edgeList.setCellRenderer((list, edge, index, selected, focused) -> {
             JLabel label = new JLabel(formatEdge(edge));
             label.setOpaque(true);
@@ -187,8 +217,27 @@ public class VertexDialog extends JDialog {
         JScrollPane edgesScroll = new JScrollPane(edgeList);
         edgesScroll.setBorder(BorderFactory.createTitledBorder("Связанные ребра"));
 
-        add(fields, BorderLayout.NORTH);
+        JButton saveButton = new JButton("Сохранить");
+        JButton deleteButton = new JButton("Удалить");
+        JButton cancelButton = new JButton("Отмена");
+        saveButton.setToolTipText("Применить изменения к графу (Ctrl+S)");
+        deleteButton.setToolTipText(newVertex
+                ? "Отменить создание вершины (Ctrl+Delete)"
+                : "Удалить вершину и все связанные рёбра (Ctrl+Delete)");
+        cancelButton.setToolTipText("Закрыть окно без применения изменений (Esc)");
+        saveButton.addActionListener(e -> handleSave());
+        deleteButton.addActionListener(e -> handleDeleteVertex());
+        cancelButton.addActionListener(e -> handleClose());
+
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+        buttons.add(deleteButton);
+        buttons.add(cancelButton);
+        buttons.add(saveButton);
+        getRootPane().setDefaultButton(saveButton);
+
+        add(north, BorderLayout.NORTH);
         add(edgesScroll, BorderLayout.CENTER);
+        add(buttons, BorderLayout.SOUTH);
     }
 
     private void bindHandlers() {

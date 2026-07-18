@@ -86,11 +86,13 @@ public final class BellmanFord {
         int negativeCyclePass = vertices.size();
         boolean cycleFound = false;
         Set<String> affectedVertices = new LinkedHashSet<>();
+        Set<String> updatedOnExtraPass = new LinkedHashSet<>();
         for (Edge edge : edges) {
             stepNumber++;
             RelaxationResult result = relax(edge, distances, predecessors);
             if (result.updated()) {
                 cycleFound = true;
+                updatedOnExtraPass.add(edge.getTo().getName());
                 affectedVertices.addAll(findNegativeCycleAffectedVertices(edge.getTo().getName(), edges));
             }
 
@@ -109,6 +111,8 @@ public final class BellmanFord {
         }
 
         if (cycleFound) {
+            Set<String> cycleVertices =
+                    findNegativeCycleVertices(updatedOnExtraPass, predecessors, vertices.size());
             stepNumber++;
             history.add(new StepState(
                     stepNumber,
@@ -120,7 +124,8 @@ public final class BellmanFord {
                     false,
                     true,
                     null,
-                    Set.copyOf(affectedVertices)
+                    Set.copyOf(affectedVertices),
+                    cycleVertices
             ));
             return history;
         }
@@ -132,13 +137,52 @@ public final class BellmanFord {
                 null,
                 distances,
                 predecessors,
-                StepExplanationBuilder.finished(),
+                StepExplanationBuilder.finished(graph.getSource().getName(), distances, predecessors),
                 false,
                 false,
                 null
         ));
 
         return history;
+    }
+
+    /**
+     * Находит вершины, лежащие непосредственно на отрицательных циклах.
+     *
+     * Для каждой вершины, расстояние до которой уменьшилось на дополнительном
+     * проходе, выполняется V шагов назад по предшественникам — так мы
+     * гарантированно попадаем внутрь цикла в графе предшественников, после
+     * чего цикл обходится целиком.
+     *
+     * @param updatedVertices вершины, обновлённые на дополнительном проходе
+     * @param predecessors текущие предшественники вершин
+     * @param vertexCount количество вершин в графе
+     * @return множество имен вершин, лежащих на отрицательных циклах
+     */
+    private static Set<String> findNegativeCycleVertices(
+            Set<String> updatedVertices,
+            Map<String, String> predecessors,
+            int vertexCount
+    ) {
+        Set<String> cycleVertices = new LinkedHashSet<>();
+        for (String updated : updatedVertices) {
+            String walker = updated;
+            for (int i = 0; i < vertexCount && walker != null; i++) {
+                walker = predecessors.get(walker);
+            }
+            if (walker == null) {
+                continue;
+            }
+
+            String current = walker;
+            do {
+                if (!cycleVertices.add(current)) {
+                    break;
+                }
+                current = predecessors.get(current);
+            } while (current != null && !current.equals(walker));
+        }
+        return cycleVertices;
     }
 
     private static RelaxationResult relax(
@@ -165,20 +209,6 @@ public final class BellmanFord {
         return new RelaxationResult(false, fromDistance, toDistance, candidate);
     }
 
-    private static RelaxationCheck checkRelaxation(Edge edge, Map<String, Integer> distances) {
-        String fromName = edge.getFrom().getName();
-        String toName = edge.getTo().getName();
-        int fromDistance = distances.get(fromName);
-        int toDistance = distances.get(toName);
-
-        if (fromDistance == INF) {
-            return new RelaxationCheck(false, fromDistance, toDistance, null);
-        }
-
-        int candidate = fromDistance + edge.getWeight();
-        return new RelaxationCheck(candidate < toDistance, fromDistance, toDistance, candidate);
-    }
-
     private static Set<String> findNegativeCycleAffectedVertices(String startVertexName, List<Edge> edges) {
         Set<String> affected = new LinkedHashSet<>();
         collectReachableVertices(startVertexName, edges, affected);
@@ -201,14 +231,6 @@ public final class BellmanFord {
             boolean updated,
             int fromDistance,
             int oldToDistance,
-            Integer candidateDistance
-    ) {
-    }
-
-    record RelaxationCheck(
-            boolean canRelax,
-            int fromDistance,
-            int toDistance,
             Integer candidateDistance
     ) {
     }

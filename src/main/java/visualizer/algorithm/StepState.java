@@ -21,6 +21,7 @@ public class StepState {
     private final boolean negativeCycle;
     private final String updatedVertexName;
     private final Set<String> negativeCycleAffectedVertices;
+    private final Set<String> negativeCycleVertices;
 
     /**
      * Создает снимок состояния алгоритма.
@@ -87,6 +88,50 @@ public class StepState {
             String updatedVertexName,
             Set<String> negativeCycleAffectedVertices
     ) {
+        this(
+                stepNumber,
+                passNumber,
+                currentEdge,
+                distances,
+                predecessors,
+                explanation,
+                updated,
+                negativeCycle,
+                updatedVertexName,
+                negativeCycleAffectedVertices,
+                Set.of()
+        );
+    }
+
+    /**
+     * Создает снимок состояния алгоритма с полной информацией об
+     * отрицательном цикле: затронутые вершины и вершины самого цикла.
+     *
+     * @param stepNumber общий номер шага
+     * @param passNumber номер прохода алгоритма
+     * @param currentEdge текущее рассматриваемое ребро
+     * @param distances текущие расстояния до вершин
+     * @param predecessors текущие предшественники вершин
+     * @param explanation текстовое пояснение шага
+     * @param updated было ли обновлено расстояние
+     * @param negativeCycle обнаружен ли отрицательный цикл
+     * @param updatedVertexName имя вершины, расстояние до которой обновилось
+     * @param negativeCycleAffectedVertices вершины с неопределенным расстоянием
+     * @param negativeCycleVertices вершины, лежащие на отрицательном цикле
+     */
+    public StepState(
+            int stepNumber,
+            int passNumber,
+            Edge currentEdge,
+            Map<String, Integer> distances,
+            Map<String, String> predecessors,
+            String explanation,
+            boolean updated,
+            boolean negativeCycle,
+            String updatedVertexName,
+            Set<String> negativeCycleAffectedVertices,
+            Set<String> negativeCycleVertices
+    ) {
         this.stepNumber = stepNumber;
         this.passNumber = passNumber;
         this.currentEdge = currentEdge;
@@ -97,6 +142,7 @@ public class StepState {
         this.negativeCycle = negativeCycle;
         this.updatedVertexName = updatedVertexName;
         this.negativeCycleAffectedVertices = new LinkedHashSet<>(negativeCycleAffectedVertices);
+        this.negativeCycleVertices = new LinkedHashSet<>(negativeCycleVertices);
     }
 
     /**
@@ -187,5 +233,14 @@ public class StepState {
      */
     public Set<String> getNegativeCycleAffectedVertices() {
         return new LinkedHashSet<>(negativeCycleAffectedVertices);
+    }
+
+    /**
+     * Возвращает вершины, лежащие непосредственно на отрицательном цикле.
+     *
+     * @return копия множества имен вершин
+     */
+    public Set<String> getNegativeCycleVertices() {
+        return new LinkedHashSet<>(negativeCycleVertices);
     }
 }

@@ -57,12 +57,28 @@ public class MainSplitPane extends JSplitPane {
         return graphPanel;
     }
 
+    public Graph getGraph() {
+        return graphPanel.getGraph();
+    }
+
     public DistanceTable getDistanceTable() {
         return distanceTable;
     }
 
     public void clearHighlight() {
         graphPanel.clearHighlight();
+    }
+
+    public void refreshGraph() {
+        graphPanel.refreshGraph();
+    }
+
+    public void setEditMode(boolean editMode) {
+        graphPanel.setEditMode(editMode);
+    }
+
+    public void setGraphChangedHandler(Runnable graphChangedHandler) {
+        graphPanel.setGraphChangedHandler(graphChangedHandler);
     }
 
     /**

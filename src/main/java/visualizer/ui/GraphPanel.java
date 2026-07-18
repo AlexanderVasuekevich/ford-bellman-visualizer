@@ -6,6 +6,8 @@ import visualizer.model.Vertex;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.*;
 import java.util.List;
 
@@ -20,6 +22,8 @@ public class GraphPanel extends JPanel {
     private Map<String, Integer> distances;
     private Map<String, String> predecessors;
     private boolean showDistances = false;
+    private boolean editMode;
+    private Runnable graphChangedHandler;
 
     public GraphPanel() {
         setBackground(Color.WHITE);
@@ -27,6 +31,12 @@ public class GraphPanel extends JPanel {
         this.graph = null;
         this.vertexList = new ArrayList<>();
         this.edgeList = new ArrayList<>();
+        addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                handleEditClick(e);
+            }
+        });
     }
 
     public GraphPanel(Graph graph) {
@@ -40,8 +50,34 @@ public class GraphPanel extends JPanel {
             this.vertexList = new ArrayList<>(graph.getVertices());
             this.edgeList = graph.getEdges();
             autoLayoutVertices();
+            updateSize();
         }
         repaint();
+    }
+
+    public Graph getGraph() {
+        return graph;
+    }
+
+    public void refreshGraph() {
+        if (graph != null) {
+            this.vertexList = new ArrayList<>(graph.getVertices());
+            this.edgeList = graph.getEdges();
+            updateSize();
+        }
+        repaint();
+    }
+
+    public void setEditMode(boolean editMode) {
+        this.editMode = editMode;
+    }
+
+    public boolean isEditMode() {
+        return editMode;
+    }
+
+    public void setGraphChangedHandler(Runnable graphChangedHandler) {
+        this.graphChangedHandler = graphChangedHandler;
     }
 
     // Размещение вершин по кругу
@@ -285,15 +321,49 @@ public class GraphPanel extends JPanel {
     }
 
     public void updateSize() {
-    if (vertexList != null && !vertexList.isEmpty()) {
-        int maxX = 0;
-        int maxY = 0;
-        for (Vertex v : vertexList) {
-            maxX = Math.max(maxX, v.getX() + VERTEX_RADIUS + 50);
-            maxY = Math.max(maxY, v.getY() + VERTEX_RADIUS + 50);
+        if (vertexList != null && !vertexList.isEmpty()) {
+            int maxX = 0;
+            int maxY = 0;
+            for (Vertex v : vertexList) {
+                maxX = Math.max(maxX, v.getX() + VERTEX_RADIUS + 50);
+                maxY = Math.max(maxY, v.getY() + VERTEX_RADIUS + 50);
+            }
+            setPreferredSize(new Dimension(Math.max(800, maxX), Math.max(600, maxY)));
+            revalidate();
         }
-        setPreferredSize(new Dimension(Math.max(800, maxX), Math.max(600, maxY)));
-        revalidate();
     }
-}
+
+    private void handleEditClick(MouseEvent e) {
+        if (!editMode || !SwingUtilities.isLeftMouseButton(e)) {
+            return;
+        }
+
+        if (graph == null) {
+            setGraph(new Graph());
+        }
+
+        Vertex clickedVertex = findVertexAt(e.getX(), e.getY());
+        Window parent = SwingUtilities.getWindowAncestor(this);
+        VertexDialog dialog = new VertexDialog(parent, graph, clickedVertex, e.getX(), e.getY(), () -> {
+            refreshGraph();
+            if (graphChangedHandler != null) {
+                graphChangedHandler.run();
+            }
+        });
+        dialog.setVisible(true);
+    }
+
+    private Vertex findVertexAt(int x, int y) {
+        if (vertexList == null) {
+            return null;
+        }
+        for (Vertex vertex : vertexList) {
+            int dx = x - vertex.getX();
+            int dy = y - vertex.getY();
+            if (dx * dx + dy * dy <= VERTEX_RADIUS * VERTEX_RADIUS) {
+                return vertex;
+            }
+        }
+        return null;
+    }
 }

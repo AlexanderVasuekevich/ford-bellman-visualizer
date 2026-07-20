@@ -23,6 +23,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -47,6 +48,7 @@ public class VertexDialog extends JDialog {
 
     private final JTextField nameField = new JTextField();
     private final JTextField commandField = new JTextField();
+    private final JLabel sourceLabel = new JLabel();
     private final DefaultListModel<Edge> edgeListModel = new DefaultListModel<>();
     private final JList<Edge> edgeList = new JList<>(edgeListModel);
 
@@ -200,9 +202,16 @@ public class VertexDialog extends JDialog {
         hint.setFont(hint.getFont().deriveFont(Font.ITALIC, 11f));
         hint.setBorder(BorderFactory.createEmptyBorder(4, 10, 0, 10));
 
+        sourceLabel.setFont(sourceLabel.getFont().deriveFont(Font.BOLD, 11f));
+        sourceLabel.setBorder(BorderFactory.createEmptyBorder(2, 10, 0, 10));
+
+        JPanel notes = new JPanel(new GridLayout(2, 1, 0, 2));
+        notes.add(hint);
+        notes.add(sourceLabel);
+
         JPanel north = new JPanel(new BorderLayout());
         north.add(fields, BorderLayout.CENTER);
-        north.add(hint, BorderLayout.SOUTH);
+        north.add(notes, BorderLayout.SOUTH);
 
         edgeList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         edgeList.setToolTipText("Правый клик по ребру — удалить");
@@ -296,11 +305,30 @@ public class VertexDialog extends JDialog {
 
     private void refreshEdgeList() {
         edgeListModel.clear();
-        if (!draftGraph.hasVertex(draftVertexName)) {
-            return;
+        if (draftGraph.hasVertex(draftVertexName)) {
+            for (Edge edge : draftGraph.getIncidentEdges(draftVertexName)) {
+                edgeListModel.addElement(edge);
+            }
         }
-        for (Edge edge : draftGraph.getIncidentEdges(draftVertexName)) {
-            edgeListModel.addElement(edge);
+        refreshSourceLabel();
+    }
+
+    /**
+     * Обновляет индикатор стартовой вершины, чтобы применение команды
+     * SOURCE было сразу видно пользователю.
+     */
+    private void refreshSourceLabel() {
+        Vertex source = draftGraph.getSource();
+        if (source != null && source.getName().equals(draftVertexName)) {
+            sourceLabel.setText("✓ Эта вершина — стартовая (SOURCE).");
+            sourceLabel.setForeground(new Color(0, 130, 0));
+        } else if (source != null) {
+            sourceLabel.setText("Стартовая вершина: " + source.getName()
+                    + ". Команда SOURCE сделает стартовой эту.");
+            sourceLabel.setForeground(Color.DARK_GRAY);
+        } else {
+            sourceLabel.setText("Стартовая вершина не задана — введите SOURCE, чтобы назначить эту.");
+            sourceLabel.setForeground(new Color(160, 70, 0));
         }
     }
 

@@ -17,6 +17,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
@@ -87,8 +88,17 @@ public class MainWindow extends JFrame {
 
         setLayout(new BorderLayout());
         add(buildToolBar(), BorderLayout.NORTH);
-        add(buildCenter(), BorderLayout.CENTER);
-        add(buildBottomPanel(), BorderLayout.SOUTH);
+
+        // Вертикальный сплиттер: границу между холстом графа и областью
+        // пояснения шага можно перетаскивать мышью.
+        JSplitPane verticalSplit = new JSplitPane(
+                JSplitPane.VERTICAL_SPLIT,
+                buildCenter(),
+                buildBottomPanel()
+        );
+        verticalSplit.setResizeWeight(1.0);
+        verticalSplit.setOneTouchExpandable(true);
+        add(verticalSplit, BorderLayout.CENTER);
 
         setMinimumSize(new Dimension(900, 600));
         setSize(1100, 720);

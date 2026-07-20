@@ -256,8 +256,9 @@ public class GraphPanel extends JPanel {
             if (updatedVertexName != null && v.getName().equals(updatedVertexName)) {
                 isUpdated = true;
             }
-            
-            drawVertex(g2d, v, isFrom, isTo, isUpdated);
+
+            boolean isSource = graph != null && graph.getSource() == v;
+            drawVertex(g2d, v, isFrom, isTo, isUpdated, isSource);
         }
     }
 
@@ -344,7 +345,8 @@ public class GraphPanel extends JPanel {
     }
 
 
-    private void drawVertex(Graphics2D g2d, Vertex vertex, boolean isFrom, boolean isTo, boolean isUpdated) {
+    private void drawVertex(Graphics2D g2d, Vertex vertex, boolean isFrom, boolean isTo,
+                            boolean isUpdated, boolean isSource) {
         String name = vertex.getName();
         int x = vertex.getX();
         int y = vertex.getY();
@@ -377,8 +379,9 @@ public class GraphPanel extends JPanel {
             fillColor = new Color(255, 255, 150);
             borderColor = new Color(200, 200, 0);
             borderWidth = 3.0f;
-        } else if (distances != null && distances.containsKey(name) && distances.get(name) == 0) {
-            // Стартовая вершина
+        } else if (isSource) {
+            // Стартовая вершина выделяется всегда, в том числе сразу после
+            // назначения командой SOURCE в режиме редактирования
             fillColor = new Color(200, 255, 200);
             borderColor = new Color(0, 150, 0);
         }
@@ -397,6 +400,15 @@ public class GraphPanel extends JPanel {
         FontMetrics fm = g2d.getFontMetrics();
         int textWidth = fm.stringWidth(name);
         g2d.drawString(name, x - textWidth / 2, y + 5);
+
+        // Подпись стартовой вершины
+        if (isSource) {
+            g2d.setFont(new Font("Dialog", Font.PLAIN, 11));
+            g2d.setColor(new Color(0, 130, 0));
+            String sourceMark = "старт";
+            int markWidth = g2d.getFontMetrics().stringWidth(sourceMark);
+            g2d.drawString(sourceMark, x - markWidth / 2, y - VERTEX_RADIUS - 6);
+        }
 
         // Расстояние
         if (showDistances && distances != null && distances.containsKey(name)) {
